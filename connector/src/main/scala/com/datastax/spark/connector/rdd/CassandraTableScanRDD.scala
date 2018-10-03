@@ -7,8 +7,8 @@ import com.datastax.spark.connector.cql._
 import com.datastax.spark.connector.datasource.ScanHelper
 import com.datastax.spark.connector.datasource.ScanHelper.CqlQueryParts
 import com.datastax.spark.connector.rdd.CassandraLimit._
-import com.datastax.spark.connector.rdd.partitioner.dht.{Token => ConnectorToken}
-import com.datastax.spark.connector.rdd.partitioner.{CassandraPartition, _}
+import com.datastax.spark.connector.rdd.partitioner.dht.{TokenFactory, Token => ConnectorToken}
+import com.datastax.spark.connector.rdd.partitioner.{CassandraPartition, CassandraPartitionGenerator, CqlTokenRange, NodeAddresses, _}
 import com.datastax.spark.connector.rdd.reader._
 import com.datastax.spark.connector.util.{CountingIterator}
 import com.datastax.spark.connector.writer.RowWriterFactory
@@ -67,7 +67,8 @@ class CassandraTableScanRDD[R] private[connector](
     val limit: Option[CassandraLimit] = None,
     val clusteringOrder: Option[ClusteringOrder] = None,
     val readConf: ReadConf = ReadConf(),
-    overridePartitioner: Option[Partitioner] = None)(
+    overridePartitioner: Option[Partitioner] = None,
+    val tokenRangeFilter: (ConnectorToken[_], ConnectorToken[_]) => Boolean = (_, _) => true)(
   implicit
     val classTag: ClassTag[R],
     @transient val rowReaderFactory: RowReaderFactory[R])
@@ -101,7 +102,8 @@ class CassandraTableScanRDD[R] private[connector](
       limit = limit,
       clusteringOrder = clusteringOrder,
       readConf = readConf,
-      overridePartitioner = overridePartitioner)
+      overridePartitioner = overridePartitioner,
+      tokenRangeFilter = tokenRangeFilter)
   }
 
 
@@ -117,7 +119,8 @@ class CassandraTableScanRDD[R] private[connector](
       limit = limit,
       clusteringOrder = clusteringOrder,
       readConf = readConf,
-      overridePartitioner = overridePartitioner)
+      overridePartitioner = overridePartitioner,
+      tokenRangeFilter = tokenRangeFilter)
   }
 
   /**
@@ -161,7 +164,8 @@ class CassandraTableScanRDD[R] private[connector](
       limit = limit,
       clusteringOrder = clusteringOrder,
       readConf = readConf,
-      overridePartitioner = cassPart)
+      overridePartitioner = cassPart,
+      tokenRangeFilter = tokenRangeFilter)
   }
 
   /** Selects a subset of columns mapped to the key and returns an RDD of pairs.
@@ -280,8 +284,17 @@ class CassandraTableScanRDD[R] private[connector](
     split.asInstanceOf[CassandraPartition[_, _]].endpoints
 
   override def compute(split: Partition, context: TaskContext): Iterator[R] = {
-    val partition = split.asInstanceOf[CassandraPartition[Any, _ <: ConnectorToken[Any]]]
-    val tokenRanges = partition.tokenRanges
+    val partition = split.asInstanceOf[CassandraPartition[TokenFactory.V, TokenFactory.T]]
+    val tokenRanges = // Only let token ranges that shouldn't be skipped through
+      partition.tokenRanges.filter { cqlRange =>
+        val (start, end) = (cqlRange.range.start.asInstanceOf[ConnectorToken[_]],
+          cqlRange.range.end.asInstanceOf[ConnectorToken[_]])
+        val result = tokenRangeFilter(start, end)
+
+        logInfo(s"tokenRangeFilter(${start}, ${end}) = ${result}")
+
+        result
+      }
     val metricsUpdater = InputMetricsUpdater(context, readConf)
 
     val columnNames = selectedColumnRefs.map(_.selectedAs).toIndexedSeq
@@ -312,6 +325,7 @@ class CassandraTableScanRDD[R] private[connector](
       scanner.close()
       context
     }
+
     countingIterator
   }
 
@@ -394,6 +408,7 @@ object CassandraTableScanRDD {
       where = rdd.where,
       limit = rdd.limit,
       clusteringOrder = rdd.clusteringOrder,
-      readConf = rdd.readConf)
+      readConf = rdd.readConf,
+      tokenRangeFilter = rdd.tokenRangeFilter)
   }
 }
