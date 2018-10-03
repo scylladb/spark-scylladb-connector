@@ -37,7 +37,7 @@ case class CassandraDriverDataWriter(
   private val columns = SomeColumns(inputSchema.fieldNames.map(name => ColumnName(name)): _*)
 
   private val writer =
-    TableWriter(connector, tableDef, columns, writeConf, false)(unsafeRowWriterFactory)
+    TableWriter(connector, tableDef, columns, writeConf, false, partitions = Array(), None)(unsafeRowWriterFactory)
       .getAsyncWriter()
 
   override def write(record: InternalRow): Unit = writer.write(record)

@@ -7,11 +7,12 @@ import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.{DefaultBatchType, PreparedStatement, SimpleStatement}
 import com.datastax.spark.connector._
 import com.datastax.spark.connector.cql._
+import com.datastax.spark.connector.rdd.partitioner.{CassandraPartition, CqlTokenRange}
 import com.datastax.spark.connector.types.{ListType, MapType}
 import com.datastax.spark.connector.util.Quote._
 import com.datastax.spark.connector.util._
 import com.datastax.spark.connector.writer.AsyncExecutor.Handler
-import org.apache.spark.TaskContext
+import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.metrics.OutputMetricsUpdater
 
 import scala.collection._
@@ -25,7 +26,9 @@ class TableWriter[T] private (
     tableDef: TableDef,
     columnSelector: IndexedSeq[ColumnRef],
     rowWriter: RowWriter[T],
-    writeConf: WriteConf) extends Serializable with Logging {
+    writeConf: WriteConf,
+    partitions: Array[Partition],
+    tokenRangeAcc: Option[TokenRangeAccumulator]) extends Serializable with Logging {
 
   require(!tableDef.isView,
     s"${tableDef.name} is a Materialized View and Views are not writable")
@@ -179,6 +182,12 @@ class TableWriter[T] private (
   def delete(columns: ColumnSelector) (taskContext: TaskContext, data: Iterator[T]): Unit =
     writeInternal(getAsyncWriterInternal(deleteQueryTemplate(columns)), taskContext, data)
 
+  def extractTokenRange(partitionId: Int): Iterable[CqlTokenRange[_, _]] =
+    partitions.lift(partitionId) match {
+      case Some(CassandraPartition(_, _, ranges, _)) => ranges
+      case _ => List()
+    }
+
   def getAsyncWriter(): AsyncStatementWriter[T] = {
     if (isCounterUpdate || containsCollectionBehaviors) {
       getAsyncWriterInternal(queryTemplateUsingUpdate)
@@ -187,6 +196,7 @@ class TableWriter[T] private (
       getAsyncWriterInternal(queryTemplateUsingInsert)
     }
   }
+
 
   private def getAsyncWriterInternal(queryTemplate: String): AsyncStatementWriter[T] = {
     connector.withSessionDo { session =>
@@ -221,6 +231,8 @@ class TableWriter[T] private (
 
   private def writeInternal(asyncStatementWriter: AsyncStatementWriter[T], taskContext: TaskContext, data: Iterator[T]) {
     val updater = OutputMetricsUpdater(taskContext, writeConf)
+    val tokenRanges = extractTokenRange(taskContext.partitionId())
+    logInfo(s"Writing ranges: ${tokenRanges}")
 
     val metricMonitoringWriter = asyncStatementWriter.copy(
         successHandler = Some(updater.batchFinished(success = true, _, _, _)),
@@ -238,6 +250,9 @@ class TableWriter[T] private (
 
     val duration = updater.finish() / 1000000000d
     logInfo(f"Wrote ${rowIterator.count} rows to $keyspaceName.$tableName in $duration%.3f s.")
+
+    tokenRangeAcc.foreach(_.add(tokenRanges.toSet))
+    logInfo("Added token ranges to accumulator")
   }
 }
 
@@ -411,10 +426,12 @@ object TableWriter {
       tableName: String,
       columnNames: ColumnSelector,
       writeConf: WriteConf,
-      checkPartitionKey: Boolean = false): TableWriter[T] = {
+      checkPartitionKey: Boolean = false,
+      partitions: Array[Partition] = Array(),
+      tokenRangeAcc: Option[TokenRangeAccumulator] = None): TableWriter[T] = {
 
     val tableDef = tableFromCassandra(connector, keyspaceName, tableName)
-    TableWriter(connector, tableDef, columnNames, writeConf, checkPartitionKey)
+    TableWriter(connector, tableDef, columnNames, writeConf, checkPartitionKey, partitions, tokenRangeAcc)
   }
 
   def apply[T : RowWriterFactory](
@@ -422,7 +439,9 @@ object TableWriter {
        tableDef: TableDef,
        columnNames: ColumnSelector,
        writeConf: WriteConf,
-       checkPartitionKey: Boolean): TableWriter[T] = {
+       checkPartitionKey: Boolean,
+       partitions: Array[Partition],
+       tokenRangeAcc: Option[TokenRangeAccumulator]): TableWriter[T] = {
 
     val optionColumns = writeConf.optionsAsColumns(tableDef.keyspaceName, tableDef.tableName)
     val tablDefWithMeta = tableDef.copy(regularColumns = tableDef.regularColumns ++ optionColumns)
@@ -433,6 +452,6 @@ object TableWriter {
     val rowWriter = implicitly[RowWriterFactory[T]].rowWriter(tablDefWithMeta, selectedColumns)
 
     checkColumns(tablDefWithMeta, selectedColumns, checkPartitionKey)
-    new TableWriter[T](connector, tablDefWithMeta, selectedColumns, rowWriter, writeConf)
+    new TableWriter[T](connector, tablDefWithMeta, selectedColumns, rowWriter, writeConf, partitions, tokenRangeAcc)
   }
 }
