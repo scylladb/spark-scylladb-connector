@@ -7,10 +7,11 @@ import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.{DefaultBatchType, PreparedStatement, SimpleStatement}
 import com.datastax.spark.connector._
 import com.datastax.spark.connector.cql._
+import com.datastax.spark.connector.rdd.partitioner.{CassandraPartition, CqlTokenRange}
 import com.datastax.spark.connector.types.{ListType, MapType}
 import com.datastax.spark.connector.util.Quote._
 import com.datastax.spark.connector.util._
-import org.apache.spark.TaskContext
+import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.metrics.OutputMetricsUpdater
 
 import scala.collection._
@@ -24,7 +25,9 @@ class TableWriter[T] private (
     tableDef: TableDef,
     columnSelector: IndexedSeq[ColumnRef],
     rowWriter: RowWriter[T],
-    writeConf: WriteConf) extends Serializable with Logging {
+    writeConf: WriteConf,
+    partitions: Array[Partition],
+    tokenRangeAcc: Option[TokenRangeAccumulator]) extends Serializable with Logging {
 
   require(!tableDef.isView,
     s"${tableDef.name} is a Materialized View and Views are not writable")
@@ -193,8 +196,17 @@ class TableWriter[T] private (
   def delete(columns: ColumnSelector) (taskContext: TaskContext, data: Iterator[T]): Unit =
     writeInternal(deleteQueryTemplate(columns), taskContext, data)
 
+  def extractTokenRange(partitionId: Int): Iterable[CqlTokenRange[_, _]] =
+    partitions.lift(partitionId) match {
+      case Some(CassandraPartition(_, _, ranges, _)) => ranges
+      case _ => List()
+    }
+
   private def writeInternal(queryTemplate: String, taskContext: TaskContext, data: Iterator[T]) {
     val updater = OutputMetricsUpdater(taskContext, writeConf)
+    val tokenRanges = extractTokenRange(taskContext.partitionId())
+    logInfo(s"Writing ranges: ${tokenRanges}")
+
     connector.withSessionDo { session =>
       val protocolVersion = session.getContext.getProtocolVersion
       val rowIterator = new CountingIterator(data)
@@ -247,6 +259,9 @@ class TableWriter[T] private (
       val duration = updater.finish() / 1000000000d
       logInfo(f"Wrote ${rowIterator.count} rows to $keyspaceName.$tableName in $duration%.3f s.")
       if (boundStmtBuilder.logUnsetToNullWarning){ logWarning(boundStmtBuilder.UnsetToNullWarning) }
+
+      tokenRangeAcc.foreach(_.add(tokenRanges.toSet))
+      logInfo("Added token ranges to accumulator")
     }
   }
 }
@@ -373,7 +388,9 @@ object TableWriter {
       tableName: String,
       columnNames: ColumnSelector,
       writeConf: WriteConf,
-      checkPartitionKey: Boolean = false): TableWriter[T] = {
+      checkPartitionKey: Boolean = false,
+      partitions: Array[Partition] = Array(),
+      tokenRangeAcc: Option[TokenRangeAccumulator] = None): TableWriter[T] = {
 
     val tableDef = tableFromCassandra(connector, keyspaceName, tableName)
     val optionColumns = writeConf.optionsAsColumns(keyspaceName, tableName)
@@ -385,6 +402,6 @@ object TableWriter {
     val rowWriter = implicitly[RowWriterFactory[T]].rowWriter(tablDefWithMeta, selectedColumns)
 
     checkColumns(tablDefWithMeta, selectedColumns, checkPartitionKey)
-    new TableWriter[T](connector, tablDefWithMeta, selectedColumns, rowWriter, writeConf)
+    new TableWriter[T](connector, tablDefWithMeta, selectedColumns, rowWriter, writeConf, partitions, tokenRangeAcc)
   }
 }
