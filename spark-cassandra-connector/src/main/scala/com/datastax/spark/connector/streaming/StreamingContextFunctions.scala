@@ -4,6 +4,7 @@ import com.datastax.spark.connector.cql.CassandraConnector
 import com.datastax.spark.connector.rdd.{ReadConf, ValidRDDType}
 import org.apache.spark.streaming.StreamingContext
 import com.datastax.spark.connector.SparkContextFunctions
+import com.datastax.spark.connector.rdd.partitioner.dht.Token
 import com.datastax.spark.connector.rdd.reader.RowReaderFactory
 
 /** Provides Cassandra-specific methods on `org.apache.spark.streaming.StreamingContext`.
@@ -13,7 +14,7 @@ class StreamingContextFunctions (ssc: StreamingContext) extends SparkContextFunc
   import scala.reflect.ClassTag
 
   override def cassandraTable[T](keyspace: String, table: String,
-                                 tokenRangeFilter: (Long, Long) => Boolean = (_, _) => true)(
+                                 tokenRangeFilter: (Token[_], Token[_]) => Boolean = (_, _) => true)(
     implicit
       connector: CassandraConnector = CassandraConnector(ssc.sparkContext),
       readConf: ReadConf = ReadConf.fromSparkConf(sc.getConf),

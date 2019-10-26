@@ -3,6 +3,7 @@ package com.datastax.spark.connector
 import com.datastax.spark.connector.cql.CassandraConnector
 import com.datastax.spark.connector.rdd.reader.RowReaderFactory
 import com.datastax.spark.connector.rdd._
+import com.datastax.spark.connector.rdd.partitioner.dht.Token
 import com.datastax.spark.connector.writer.RowWriterFactory
 import org.apache.spark.SparkContext
 
@@ -48,7 +49,7 @@ class SparkContextFunctions(@transient val sc: SparkContext) extends Serializabl
   def cassandraTable[T](
     keyspace: String,
     table: String,
-    tokenRangeFilter: (Long, Long) => Boolean = (_, _) => true)(
+    tokenRangeFilter: (Token[_], Token[_]) => Boolean = (_, _) => true)(
   implicit
     connector: CassandraConnector = CassandraConnector(sc),
     readConf: ReadConf = ReadConf.fromSparkConf(sc.getConf),
