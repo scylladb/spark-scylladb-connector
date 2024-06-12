@@ -23,6 +23,7 @@ ThisBuild / publishMavenStyle := true
 ThisBuild / publishTo := Publishing.Repository
 ThisBuild / scmInfo := Publishing.OurScmInfo
 ThisBuild / version := Publishing.Version
+ThisBuild / Compile / packageDoc / publishArtifact := false // Do not execute scaladoc when publishing because it fails on Scala 2.11. It is also slow.
 
 Global / resolvers ++= Seq(
   DefaultMavenRepository,
