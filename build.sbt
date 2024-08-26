@@ -13,11 +13,11 @@ ThisBuild / scalacOptions ++= Seq("-target:jvm-1.8")
 
 // Publishing Info
 ThisBuild / credentials ++= Publishing.Creds
-ThisBuild / homepage := Some(url("https://github.com/datastax/spark-cassandra-connector"))
+ThisBuild / homepage := Some(url("https://github.com/scylladb/spark-scylladb-connector"))
 ThisBuild / licenses := List("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt") )
-ThisBuild / organization := "com.datastax.spark"
-ThisBuild / organizationName := "Datastax"
-ThisBuild / organizationHomepage := Some(url("https://www.datastax.com"))
+ThisBuild / organization := "com.scylladb"
+ThisBuild / organizationName := "ScyllaDB"
+ThisBuild / organizationHomepage := Some(url("https://scylladb.com"))
 ThisBuild / pomExtra := Publishing.OurDevelopers
 ThisBuild / pomIncludeRepository := { _ => false }
 ThisBuild / publishMavenStyle := true
@@ -92,7 +92,7 @@ lazy val connector = (project in file("connector"))
   .settings(assemblySettings)
   .settings(
     crossScalaVersions := supportedScalaVersions,
-    name := "spark-cassandra-connector",
+    name := "spark-scylladb-connector",
 
     javacOptions ++= Seq("-source", "1.8", "-target", "1.8"),
 
@@ -125,7 +125,7 @@ lazy val testSupport = (project in file("test-support"))
   .settings(commonSettings)
   .settings(
     crossScalaVersions := supportedScalaVersions,
-    name := "spark-cassandra-connector-test-support",
+    name := "spark-scylladb-connector-test-support",
     libraryDependencies ++= Dependencies.Compatibility.dependencies(scalaVersion.value)
       ++ Dependencies.TestSupport.dependencies
   )
@@ -135,7 +135,7 @@ lazy val driver = (project in file("driver"))
   .settings(commonSettings)
   .settings(
     crossScalaVersions := supportedScalaVersions,
-    name := "spark-cassandra-connector-driver",
+    name := "spark-scylladb-connector-driver",
     assembly /test := {},
     libraryDependencies ++= Dependencies.Compatibility.dependencies(scalaVersion.value)
       ++ Dependencies.Driver.dependencies
@@ -143,13 +143,13 @@ lazy val driver = (project in file("driver"))
       :+ ("org.scala-lang" % "scala-reflect" % scalaVersion.value)
   )
 
-/** The following project defines an extra artifact published alongside main 'spark-cassandra-connector'.
+/** The following project defines an extra artifact published alongside main 'spark-scylladb-connector'.
   * It's an assembled version of the main artifact. It contains all of the dependent classes, some of them
   * are shaded. */
 lazy val publishableAssembly = project
   .disablePlugins(AssemblyPlugin)
   .settings(
     crossScalaVersions := supportedScalaVersions,
-    name := "spark-cassandra-connector-assembly",
+    name := "spark-scylladb-connector-assembly",
     Compile / packageBin := (assembly in (connector, Compile)).value
   )
