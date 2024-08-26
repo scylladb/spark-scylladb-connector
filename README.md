@@ -4,6 +4,12 @@
 
 [![CI](https://github.com/datastax/spark-cassandra-connector/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/datastax/spark-cassandra-connector/actions?query=branch%3Amaster)
 
+This is a fork from [datastax/spark-cassandra-connector](https://github.com/datastax/spark-cassandra-connector) including features specific to [ScyllaDB](https://scylladb.com) and to the needs of the [ScyllaDB Migrator](https://migrator.docs.scylladb.com).
+
+## Changes compared to the original library
+
+The complete changelog can be viewed here: [master...scylla-4.x](https://github.com/datastax/spark-cassandra-connector/compare/master...scylladb:spark-scylladb-connector:scylla-4.x).
+
 ## Quick Links
 
 | What       | Where                                                                                                                                                                                                                                                                                                                                 |
@@ -110,7 +116,7 @@ This project is available on the Maven Central Repository.
 For SBT to download the connector binaries, sources and javadoc, put this in your project
 SBT config:
 
-    libraryDependencies += "com.datastax.spark" %% "spark-cassandra-connector" % "3.5.0"
+    libraryDependencies += "com.scylladb" %% "spark-scylladb-connector" % "4.0.0"
 
 * The default Scala version for Spark 3.0+ is 2.12 please choose the appropriate build. See the
 [FAQ](doc/FAQ.md) for more information.
@@ -211,9 +217,15 @@ To generate the Reference Document use
 
 outputLocation defaults to doc/reference.md
 
+## Branching Model
+
+Our branch `scylla-4.x` is based off commit `dbbf02890605692d163572cda4b2462993754d7b`. It introduces binary incompatible changes compared to the upstream version 3.5.x.
+
+We should occasionally merge the upstream changes to our fork.
+
 ## License
 
-Copyright 2014-2022, DataStax, Inc.
+Copyright DataStax, Inc. Copyright ScyllaDB.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at
 

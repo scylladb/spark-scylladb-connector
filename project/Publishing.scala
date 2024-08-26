@@ -68,8 +68,8 @@ object Publishing extends sbt.librarymanagement.DependencyBuilders {
   val OurScmInfo =
     Some(
       ScmInfo(
-        url("https://github.com/datastax/spark-cassandra-connector"),
-        "scm:git@github.com:datastax/spark-cassandra-connector.git"
+        url("https://github.com/scylladb/spark-scylladb-connector"),
+        "scm:git@github.com:scylladb/spark-scylladb-connector.git"
       )
     )
 
