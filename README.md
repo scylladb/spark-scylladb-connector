@@ -12,11 +12,15 @@ The complete changelog can be viewed here: [master...scylla-4.x](https://github.
 
 ## Quick Links
 
-| What       | Where                                                                                                                                                                                                                                                                                                                                 |
-| ---------- |---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Community  | Chat with us at [Apache Cassandra](https://cassandra.apache.org/_/community.html#discussions)                                                                                                                                                                                                                                               |
-| Scala Docs | Most Recent Release (3.5.0): [Connector API docs](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.0/connector/com/datastax/spark/connector/index.html), [Connector Driver docs](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.0/driver/com/datastax/spark/connector/index.html) |
-| Latest Production Release | [3.5.0](https://search.maven.org/artifact/com.datastax.spark/spark-cassandra-connector_2.12/3.5.0/jar)                                                                                                                                                                                                                                |
+| What       | Where                                                                                                                                                                                                                                                                                                               |
+| ---------- |---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Community  | Chat with us at [Apache Cassandra](https://cassandra.apache.org/_/community.html#discussions)                                                                                                                                                                                                                       |
+| Scala Docs | Most Recent Release (3.5.1): [Connector API docs](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.1/connector/com/datastax/spark/connector/index.html), [Connector Driver docs](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.1/driver/com/datastax/spark/connector/index.html) |
+| Latest Production Release | [3.5.1](https://search.maven.org/artifact/com.datastax.spark/spark-cassandra-connector_2.12/3.5.1/jar)                                                                                                                                                                                                              |
+
+## News
+### 3.5.1
+ - The latest release of the Spark-Cassandra-Connector introduces support for vector types, greatly enhancing its capabilities. This new feature allows developers to seamlessly integrate and work with Cassandra 5.0 and Astra vectors within the Spark ecosystem. By supporting vector types, the connector now provides insights into AI and Retrieval-Augmented Generation (RAG) data, enabling more advanced and efficient data processing and analysis.
  
 ## Features
 
@@ -59,31 +63,35 @@ Currently, the following branches are actively supported:
 3.0.x ([b3.0](https://github.com/datastax/spark-cassandra-connector/tree/b3.0)) and 
 2.5.x ([b2.5](https://github.com/datastax/spark-cassandra-connector/tree/b2.5)).
 
-| Connector | Spark         | Cassandra             | Cassandra Java Driver | Minimum Java Version | Supported Scala Versions |
-|-----------|---------------|-----------------------| --------------------- | -------------------- | -----------------------  |
-| 3.5       | 3.5           | 2.1.5*, 2.2, 3.x, 4.x | 4.13             | 8              | 2.12, 2.13              |  
-| 3.4       | 3.4           | 2.1.5*, 2.2, 3.x, 4.x | 4.13             | 8             | 2.12, 2.13               |
-| 3.3       | 3.3           | 2.1.5*, 2.2, 3.x, 4.x | 4.13             | 8             | 2.12                     |
-| 3.2       | 3.2           | 2.1.5*, 2.2, 3.x, 4.0 | 4.13             | 8             | 2.12                     |
-| 3.1       | 3.1           | 2.1.5*, 2.2, 3.x, 4.0 | 4.12             | 8             | 2.12                     |
-| 3.0       | 3.0           | 2.1.5*, 2.2, 3.x, 4.0 | 4.12             | 8             | 2.12                     |
-| 2.5       | 2.4           | 2.1.5*, 2.2, 3.x, 4.0 | 4.12             | 8             | 2.11, 2.12               |
-| 2.4.2     | 2.4           | 2.1.5*, 2.2, 3.x      | 3.0              | 8             | 2.11, 2.12               |
-| 2.4       | 2.4           | 2.1.5*, 2.2, 3.x      | 3.0              | 8             | 2.11                     |
-| 2.3       | 2.3           | 2.1.5*, 2.2, 3.x      | 3.0              | 8             | 2.11                     |
-| 2.0       | 2.0, 2.1, 2.2 | 2.1.5*, 2.2, 3.x      | 3.0              | 8             | 2.10, 2.11               |
-| 1.6       | 1.6           | 2.1.5*, 2.2, 3.0      | 3.0              | 7             | 2.10, 2.11               |
-| 1.5       | 1.5, 1.6      | 2.1.5*, 2.2, 3.0      | 3.0              | 7             | 2.10, 2.11               |
-| 1.4       | 1.4           | 2.1.5*                | 2.1              | 7             | 2.10, 2.11               |
-| 1.3       | 1.3           | 2.1.5*                | 2.1              | 7             | 2.10, 2.11               |
-| 1.2       | 1.2           | 2.1, 2.0              | 2.1              | 7             | 2.10, 2.11               |
-| 1.1       | 1.1, 1.0      | 2.1, 2.0              | 2.1              | 7             | 2.10, 2.11               |
-| 1.0       | 1.0, 0.9      | 2.0                   | 2.0              | 7             | 2.10, 2.11               |
+| Connector | Spark         | Cassandra                  | Cassandra Java Driver | Minimum Java Version | Supported Scala Versions |
+|-----------|---------------|----------------------------|-----------------------|----------------------|--------------------------|
+| 3.5.1     | 3.5           | 2.1.5*, 2.2, 3.x, 4.x, 5.0 | 4.18.1                | 8                    | 2.12, 2.13               |  
+| 3.5       | 3.5           | 2.1.5*, 2.2, 3.x, 4.x      | 4.13                  | 8                    | 2.12, 2.13               |  
+| 3.4       | 3.4           | 2.1.5*, 2.2, 3.x, 4.x      | 4.13                  | 8                    | 2.12, 2.13               |
+| 3.3       | 3.3           | 2.1.5*, 2.2, 3.x, 4.x      | 4.13                  | 8                    | 2.12                     |
+| 3.2       | 3.2           | 2.1.5*, 2.2, 3.x, 4.0      | 4.13                  | 8                    | 2.12                     |
+| 3.1       | 3.1           | 2.1.5*, 2.2, 3.x, 4.0      | 4.12                  | 8                    | 2.12                     |
+| 3.0       | 3.0           | 2.1.5*, 2.2, 3.x, 4.0      | 4.12                  | 8                    | 2.12                     |
+| 2.5       | 2.4           | 2.1.5*, 2.2, 3.x, 4.0      | 4.12                  | 8                    | 2.11, 2.12               |
+| 2.4.2     | 2.4           | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.11, 2.12               |
+| 2.4       | 2.4           | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.11                     |
+| 2.3       | 2.3           | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.11                     |
+| 2.0       | 2.0, 2.1, 2.2 | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.10, 2.11               |
+| 1.6       | 1.6           | 2.1.5*, 2.2, 3.0           | 3.0                   | 7                    | 2.10, 2.11               |
+| 1.5       | 1.5, 1.6      | 2.1.5*, 2.2, 3.0           | 3.0                   | 7                    | 2.10, 2.11               |
+| 1.4       | 1.4           | 2.1.5*                     | 2.1                   | 7                    | 2.10, 2.11               |
+| 1.3       | 1.3           | 2.1.5*                     | 2.1                   | 7                    | 2.10, 2.11               |
+| 1.2       | 1.2           | 2.1, 2.0                   | 2.1                   | 7                    | 2.10, 2.11               |
+| 1.1       | 1.1, 1.0      | 2.1, 2.0                   | 2.1                   | 7                    | 2.10, 2.11               |
+| 1.0       | 1.0, 0.9      | 2.0                        | 2.0                   | 7                    | 2.10, 2.11               |
 
 **Compatible with 2.1.X where X >= 5*
 
 ## Hosted API Docs
 API documentation for the Scala and Java interfaces are available online:
+
+### 3.5.1
+* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.1/connector/com/datastax/spark/connector/index.html)
 
 ### 3.5.0
 * [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.0/connector/com/datastax/spark/connector/index.html)
@@ -199,14 +207,13 @@ Note that the integration tests require [CCM](https://github.com/riptano/ccm) to
 See [Tips for Developing the Spark Cassandra Connector](doc/developers.md) for details.
 
 By default, integration tests start up a separate, single Cassandra instance and run Spark in local mode.
-It is possible to run integration tests with your own Cassandra and/or Spark cluster.
+It is possible to run integration tests with your own Spark cluster.
 First, prepare a jar with testing code:
 
     ./sbt/sbt test:package
 
 Then copy the generated test jar to your Spark nodes and run:    
 
-    export IT_TEST_CASSANDRA_HOST=<IP of one of the Cassandra nodes>
     export IT_TEST_SPARK_MASTER=<Spark Master URL>
     ./sbt/sbt it:test
 
