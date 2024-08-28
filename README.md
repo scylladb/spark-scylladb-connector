@@ -8,6 +8,8 @@ This is a fork from [datastax/spark-cassandra-connector](https://github.com/data
 
 ## Changes compared to the original library
 
+- Add support for skipping some token ranges when reading a table, and track into a Spark accumulator the token ranges that have been written.
+
 The complete changelog can be viewed here: [master...scylla-4.x](https://github.com/datastax/spark-cassandra-connector/compare/master...scylladb:spark-scylladb-connector:scylla-4.x).
 
 ## Quick Links
