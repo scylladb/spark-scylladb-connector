@@ -1,11 +1,11 @@
 name: CI
 
 on:
-  # Triggers the workflow on push or pull request events but only for the master branch
+  # Triggers the workflow on push or pull request events but only for the default branch
   push:
-    branches: [ b2.5, b3.0, master]
+    branches: [scylla-4.x]
   pull_request:
-    branches: [ b2.5, b3.0, master]
+    branches: [scylla-4.x]
 
   workflow_dispatch:
 
@@ -33,6 +33,7 @@ jobs:
           java-version: | # order is important, the last one is the default which will be used by SBT
             11
             8
+          cache: sbt
 
       - name: sbt tests
         env:
