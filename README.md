@@ -56,69 +56,17 @@ named "bX.Y" where X.Y is the major+minor version; for example the "b1.6" branch
 corresponds to the 1.6 release. The "master" branch will normally contain
 development for the next connector release in progress.
 
-Currently, the following branches are actively supported: 
-3.5.x ([master](https://github.com/datastax/spark-cassandra-connector/tree/master)),
-3.4.x ([b3.4](https://github.com/datastax/spark-cassandra-connector/tree/b3.4)),
-3.3.x ([b3.2](https://github.com/datastax/spark-cassandra-connector/tree/b3.3)),
-3.2.x ([b3.2](https://github.com/datastax/spark-cassandra-connector/tree/b3.2)),
-3.1.x ([b3.1](https://github.com/datastax/spark-cassandra-connector/tree/b3.1)),
-3.0.x ([b3.0](https://github.com/datastax/spark-cassandra-connector/tree/b3.0)) and 
-2.5.x ([b2.5](https://github.com/datastax/spark-cassandra-connector/tree/b2.5)).
+Currently, the following branch is actively supported: 
+4.x ([scylla-4.x](https://github.com/scylladb/spark-scylladb-connector/tree/scylla-4.x)).
 
 | Connector | Spark         | Cassandra                  | Cassandra Java Driver | Minimum Java Version | Supported Scala Versions |
 |-----------|---------------|----------------------------|-----------------------|----------------------|--------------------------|
-| 3.5.1     | 3.5           | 2.1.5*, 2.2, 3.x, 4.x, 5.0 | 4.18.1                | 8                    | 2.12, 2.13               |  
-| 3.5       | 3.5           | 2.1.5*, 2.2, 3.x, 4.x      | 4.13                  | 8                    | 2.12, 2.13               |  
-| 3.4       | 3.4           | 2.1.5*, 2.2, 3.x, 4.x      | 4.13                  | 8                    | 2.12, 2.13               |
-| 3.3       | 3.3           | 2.1.5*, 2.2, 3.x, 4.x      | 4.13                  | 8                    | 2.12                     |
-| 3.2       | 3.2           | 2.1.5*, 2.2, 3.x, 4.0      | 4.13                  | 8                    | 2.12                     |
-| 3.1       | 3.1           | 2.1.5*, 2.2, 3.x, 4.0      | 4.12                  | 8                    | 2.12                     |
-| 3.0       | 3.0           | 2.1.5*, 2.2, 3.x, 4.0      | 4.12                  | 8                    | 2.12                     |
-| 2.5       | 2.4           | 2.1.5*, 2.2, 3.x, 4.0      | 4.12                  | 8                    | 2.11, 2.12               |
-| 2.4.2     | 2.4           | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.11, 2.12               |
-| 2.4       | 2.4           | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.11                     |
-| 2.3       | 2.3           | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.11                     |
-| 2.0       | 2.0, 2.1, 2.2 | 2.1.5*, 2.2, 3.x           | 3.0                   | 8                    | 2.10, 2.11               |
-| 1.6       | 1.6           | 2.1.5*, 2.2, 3.0           | 3.0                   | 7                    | 2.10, 2.11               |
-| 1.5       | 1.5, 1.6      | 2.1.5*, 2.2, 3.0           | 3.0                   | 7                    | 2.10, 2.11               |
-| 1.4       | 1.4           | 2.1.5*                     | 2.1                   | 7                    | 2.10, 2.11               |
-| 1.3       | 1.3           | 2.1.5*                     | 2.1                   | 7                    | 2.10, 2.11               |
-| 1.2       | 1.2           | 2.1, 2.0                   | 2.1                   | 7                    | 2.10, 2.11               |
-| 1.1       | 1.1, 1.0      | 2.1, 2.0                   | 2.1                   | 7                    | 2.10, 2.11               |
-| 1.0       | 1.0, 0.9      | 2.0                        | 2.0                   | 7                    | 2.10, 2.11               |
-
-**Compatible with 2.1.X where X >= 5*
+| 4.0.0     | 3.5.x         | 2.1.5*, 2.2, 3.x, 4.x, 5.0 | 4.18.1                | 8                    | 2.12, 2.13               |
 
 ## Hosted API Docs
 API documentation for the Scala and Java interfaces are available online:
 
-### 3.5.1
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.1/connector/com/datastax/spark/connector/index.html)
-
-### 3.5.0
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.5.0/connector/com/datastax/spark/connector/index.html)
-
-### 3.4.1
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.4.1/connector/com/datastax/spark/connector/index.html)
-
-### 3.3.0
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.3.0/connector/com/datastax/spark/connector/index.html)
-
-### 3.2.0
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.2.0/connector/com/datastax/spark/connector/index.html)
-
-### 3.1.0
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.1.0/connector/com/datastax/spark/connector/index.html)
-
-### 3.0.1
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/3.0.1/connector/com/datastax/spark/connector/index.html)
-
-### 2.5.2
-* [Spark-Cassandra-Connector](https://datastax.github.io/spark-cassandra-connector/ApiDocs/2.5.2/connector/#package)
-
-### 2.4.2
-* [Spark-Cassandra-Connector](http://datastax.github.io/spark-cassandra-connector/ApiDocs/2.4.2/spark-cassandra-connector/)
-* [Embedded-Cassandra](http://datastax.github.io/spark-cassandra-connector/ApiDocs/2.4.2/spark-cassandra-connector-embedded/)
+- [Latest](https://javadoc.io/doc/com.scylladb/spark-scylladb-connector_2.13/latest/index.html).
 
 ## Download
 
