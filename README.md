@@ -230,6 +230,17 @@ Our branch `scylla-4.x` is based off commit `dbbf02890605692d163572cda4b24629937
 
 We should occasionally merge the upstream changes to our fork.
 
+## Release Process
+
+Create a [new GitHub release](https://github.com/scylladb/spark-scylladb-connector/releases), give it a tag name (please see the rules below), a title, and a description. You can generate the changelog automatically from the GitHub UI. Click Publish. A workflow will be automatically triggered and will build the project and release it on [Sonatype](https://central.sonatype.org).
+
+Rules for the release tag name:
+
+- Make sure to use tag names like `v1.2.3`, starting with `v` and followed by a [semantic version number](https://semver.org).
+- Bump the major version number if the new release breaks the backward compatibility (e.g., an existing configuration or setup will not work anymore with the new release).
+- Bump the minor version number if the new release introduces new features in a backward compatible manner.
+- Bump the patch version number if the new release only introduces bugfixes in a backward compatible manner.
+
 ## License
 
 Copyright DataStax, Inc. Copyright ScyllaDB.

@@ -12,7 +12,6 @@ ThisBuild / scalaVersion := scala212
 ThisBuild / scalacOptions ++= Seq("-target:jvm-1.8")
 
 // Publishing Info
-ThisBuild / credentials ++= Publishing.Creds
 ThisBuild / homepage := Some(url("https://github.com/scylladb/spark-scylladb-connector"))
 ThisBuild / licenses := List("Apache 2" -> new URL("http://www.apache.org/licenses/LICENSE-2.0.txt") )
 ThisBuild / organization := "com.scylladb"
@@ -20,10 +19,7 @@ ThisBuild / organizationName := "ScyllaDB"
 ThisBuild / organizationHomepage := Some(url("https://scylladb.com"))
 ThisBuild / pomExtra := Publishing.OurDevelopers
 ThisBuild / pomIncludeRepository := { _ => false }
-ThisBuild / publishMavenStyle := true
-ThisBuild / publishTo := Publishing.Repository
 ThisBuild / scmInfo := Publishing.OurScmInfo
-ThisBuild / version := Publishing.Version
 
 Global / resolvers ++= Seq(
   DefaultMavenRepository,
