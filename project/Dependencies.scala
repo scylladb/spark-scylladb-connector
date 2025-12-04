@@ -32,6 +32,7 @@ object Dependencies
 
     def driverCoreExclude(): ModuleID = module
       .exclude("org.apache.cassandra", "java-driver-core") // doesn't shade guava
+      .exclude("com.scylladb", "java-driver-core")
       .exclude("org.apache.tinkerpop", "*")
       // until SPARK-20075 is fixed we fallback to java workarounds for native calls
       .exclude("com.github.jnr", "jnr-posix")
@@ -42,7 +43,7 @@ object Dependencies
     val junit = "junit" % "junit" % JUnit
     val junitInterface = "com.novocode" % "junit-interface" % JUnitInterface
     val scalaTest = "org.scalatest" %% "scalatest" % ScalaTest
-    val driverMapperProcessor = "org.apache.cassandra" % "java-driver-mapper-processor" % CassandraJavaDriver
+    val driverMapperProcessor = "com.scylladb" % "java-driver-mapper-processor" % ScyllaDBDriverVersion
     val esriGeometry = "com.esri.geometry" % "esri-geometry-api" % EsriGeometry
   }
 
@@ -75,8 +76,8 @@ object Dependencies
   }
 
   object Driver {
-    val driverCore = "org.apache.cassandra" % "java-driver-core-shaded" % CassandraJavaDriver driverCoreExclude()
-    val driverMapper = "org.apache.cassandra" % "java-driver-mapper-runtime" % CassandraJavaDriver driverCoreExclude()
+    val driverCore = "com.scylladb" % "java-driver-core" % ScyllaDBDriverVersion driverCoreExclude()
+    val driverMapper = "com.scylladb" % "java-driver-mapper-runtime" % ScyllaDBDriverVersion driverCoreExclude()
 
     val commonsLang3 = "org.apache.commons" % "commons-lang3" % Versions.CommonsLang3
     val paranamer = "com.thoughtworks.paranamer" % "paranamer" % Versions.Paranamer
