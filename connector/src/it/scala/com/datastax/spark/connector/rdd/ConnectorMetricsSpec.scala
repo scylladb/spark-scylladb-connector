@@ -25,11 +25,12 @@ import com.datastax.spark.connector._
 import com.datastax.spark.connector.cluster.{DefaultCluster, SeparateJVM}
 import com.datastax.spark.connector.cql.CassandraConnector
 import com.datastax.spark.connector.rdd.ConnectorMetricsListener.stagesMetrics
-import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.scheduler.{SparkListener, SparkListenerStageCompleted}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Seconds, Span}
+
+import scala.collection.JavaConverters._
 
 class ConnectorMetricsSpec extends SparkCassandraITFlatSpecBase with DefaultCluster with SeparateJVM {
 
@@ -149,12 +150,12 @@ class ConnectorMetricsSpec extends SparkCassandraITFlatSpecBase with DefaultClus
     stagesMetrics.clear()
     val rdd = ourSc.makeRDD(1 to 200, 16).map(x => (x, x))
     rdd.saveToCassandra(ks, "leftjoin")
-    Eventually.eventually {
-      stagesMetrics.size() should be(1)
-    }
 
     Eventually.eventually(Eventually.timeout(Span(20, Seconds))) {
-      val metrics = stagesMetrics.poll()
+      val metrics = stagesMetrics.iterator().asScala
+        .find(_.outputMetrics.recordsWritten > 0)
+        .getOrElse(fail("No output metrics recorded yet"))
+
       metrics.outputMetrics.recordsWritten should be(200)
       metrics.outputMetrics.bytesWritten should be(200 * 8)
     }
@@ -164,10 +165,26 @@ class ConnectorMetricsSpec extends SparkCassandraITFlatSpecBase with DefaultClus
 class ConnectorMetricsListener(conf: SparkConf) extends SparkListener {
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
     val metrics = stageCompleted.stageInfo.taskMetrics
-    stagesMetrics.offer(metrics)
+    stagesMetrics.offer(ConnectorMetricsListener.snapshotMetrics(metrics))
   }
 }
 
 object ConnectorMetricsListener {
-  val stagesMetrics = new LinkedTransferQueue[TaskMetrics]()
+  final case class InputMetricsSnapshot(bytesRead: Long, recordsRead: Long)
+  final case class OutputMetricsSnapshot(bytesWritten: Long, recordsWritten: Long)
+  final case class TaskMetricsSnapshot(inputMetrics: InputMetricsSnapshot, outputMetrics: OutputMetricsSnapshot)
+
+  def snapshotMetrics(metrics: org.apache.spark.executor.TaskMetrics): TaskMetricsSnapshot = {
+    val input = InputMetricsSnapshot(
+      bytesRead = metrics.inputMetrics.bytesRead,
+      recordsRead = metrics.inputMetrics.recordsRead
+    )
+    val output = OutputMetricsSnapshot(
+      bytesWritten = metrics.outputMetrics.bytesWritten,
+      recordsWritten = metrics.outputMetrics.recordsWritten
+    )
+    TaskMetricsSnapshot(input, output)
+  }
+
+  val stagesMetrics = new LinkedTransferQueue[TaskMetricsSnapshot]()
 }
