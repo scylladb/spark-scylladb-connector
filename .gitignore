@@ -25,6 +25,7 @@ metastore_db
 *.iws
 *.iml
 
+bin/
 checkpoint
 
 # Codex - AI assistant metadata
