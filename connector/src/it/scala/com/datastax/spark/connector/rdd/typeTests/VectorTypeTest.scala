@@ -245,4 +245,3 @@ class DoubleVectorTypeTest extends VectorTypeTest[Double, java.lang.Double, Doub
 }
 
 case class DoubleVectorItem(id: Int, v: Seq[Double])
-

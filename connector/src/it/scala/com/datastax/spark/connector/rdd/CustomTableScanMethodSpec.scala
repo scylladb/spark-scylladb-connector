@@ -71,11 +71,14 @@ class CustomTableScanMethodSpec extends SparkCassandraITFlatSpecBase with Defaul
 
 object DummyFactory extends CassandraConnectionFactory {
 
-  val nie = new NotImplementedError("TestingOnly")
+  // Create a fresh exception each time so the stack trace points to the call site,
+  // not to object initialization during config checks.
+  def nie = new NotImplementedError("TestingOnly")
   override def getScanner(
     readConf: ReadConf,
     connConf: CassandraConnectorConf,
-    columnNames: IndexedSeq[String]): Scanner = throw nie
+    columnNames: IndexedSeq[String]): Scanner =
+    throw new SparkException(nie.getMessage, nie)
 
   /** Creates and configures native Cassandra connection */
   override def createSession(conf: CassandraConnectorConf): CqlSession =
