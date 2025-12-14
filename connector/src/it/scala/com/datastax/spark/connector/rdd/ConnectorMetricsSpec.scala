@@ -151,13 +151,17 @@ class ConnectorMetricsSpec extends SparkCassandraITFlatSpecBase with DefaultClus
     val rdd = ourSc.makeRDD(1 to 200, 16).map(x => (x, x))
     rdd.saveToCassandra(ks, "leftjoin")
 
-    Eventually.eventually(Eventually.timeout(Span(20, Seconds))) {
-      val metrics = stagesMetrics.iterator().asScala
-        .find(_.outputMetrics.recordsWritten > 0)
-        .getOrElse(fail("No output metrics recorded yet"))
+    var totalRecordsWritten: Long = 0
+    var totalBytesWritten: Long = 0
 
-      metrics.outputMetrics.recordsWritten should be(200)
-      metrics.outputMetrics.bytesWritten should be(200 * 8)
+    Eventually.eventually(Eventually.timeout(Span(20, Seconds))) {
+      val metrics = Option(stagesMetrics.poll())
+        .getOrElse(fail("No output metrics recorded yet"))
+      totalRecordsWritten = totalRecordsWritten + metrics.outputMetrics.recordsWritten
+      totalBytesWritten = totalBytesWritten + metrics.outputMetrics.bytesWritten
+
+      totalRecordsWritten should be(200)
+      totalBytesWritten should be(200 * 8)
     }
   }
 }
