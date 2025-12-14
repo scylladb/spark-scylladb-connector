@@ -145,7 +145,7 @@ object OutputMetricsUpdater extends Logging {
 
         logInfo(s"[DEBUG] OutputMetricsUpdater.updateTaskMetrics - Batch: +$count rows, +$dataLength bytes | Total: $afterRows rows (was $beforeRows), $afterBytes bytes (was $beforeBytes)")
       } else {
-        logWarn(s"[DEBUG] OutputMetricsUpdater.updateTaskMetrics - Batch FAILED: count=$count, dataLength=$dataLength")
+        logWarning(s"[DEBUG] OutputMetricsUpdater.updateTaskMetrics - Batch FAILED: count=$count, dataLength=$dataLength")
       }
     }
   }
