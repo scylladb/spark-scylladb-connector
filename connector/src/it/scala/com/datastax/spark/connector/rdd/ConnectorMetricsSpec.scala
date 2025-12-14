@@ -155,10 +155,10 @@ class ConnectorMetricsSpec extends SparkCassandraITFlatSpecBase with DefaultClus
     var totalBytesWritten: Long = 0
 
     Eventually.eventually(Eventually.timeout(Span(20, Seconds))) {
-      val metrics = Option(stagesMetrics.poll())
-        .getOrElse(fail("No output metrics recorded yet"))
-      totalRecordsWritten = totalRecordsWritten + metrics.outputMetrics.recordsWritten
-      totalBytesWritten = totalBytesWritten + metrics.outputMetrics.bytesWritten
+      Option(stagesMetrics.poll()).foreach { metrics =>
+        totalRecordsWritten = totalRecordsWritten + metrics.outputMetrics.recordsWritten
+        totalBytesWritten = totalBytesWritten + metrics.outputMetrics.bytesWritten
+      }
 
       totalRecordsWritten should be(200)
       totalBytesWritten should be(200 * 8)
