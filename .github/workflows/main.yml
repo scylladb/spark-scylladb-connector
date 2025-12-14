@@ -42,7 +42,8 @@ jobs:
           PUBLISH_VERSION: test
           JAVA8_HOME: ${{ env.JAVA_HOME_8_X64 }}
           JAVA11_HOME: ${{ env.JAVA_HOME_11_X64 }}
-        run: sbt/sbt ++${{ matrix.scala }} test it:test
+        run: |
+          sbt/sbt   -Dspark.master=local[1] -Dspark.default.parallelism=1 -Dspark.sql.shuffle.partitions=1 -Dspark.ui.enabled=false ++${{ matrix.scala }} test it:test
 
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v4
