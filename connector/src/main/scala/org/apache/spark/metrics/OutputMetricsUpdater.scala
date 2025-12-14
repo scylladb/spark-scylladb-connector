@@ -99,7 +99,7 @@ object OutputMetricsUpdater extends Logging {
   }
 
   private abstract class BaseOutputMetricsUpdater
-    extends OutputMetricsUpdater with Timer {
+    extends OutputMetricsUpdater with Timer with Logging {
 
     override def batchFinished(
       success: Boolean,
@@ -110,6 +110,9 @@ object OutputMetricsUpdater extends Logging {
 
       val dataLength = stmt.bytesCount
       val rowsCount = stmt.rowsCount
+
+      logInfo(s"[DEBUG] OutputMetricsUpdater.batchFinished - success=$success, rows=$rowsCount, bytes=$dataLength")
+
       updateTaskMetrics(success, rowsCount, dataLength)
       updateCodahaleMetrics(success, rowsCount, dataLength, submissionTimestamp, executionTimestamp)
     }
@@ -117,7 +120,7 @@ object OutputMetricsUpdater extends Logging {
     def finish(): Long = stopTimer()
   }
 
-  private trait TaskMetricsSupport extends OutputMetricsUpdater {
+  private trait TaskMetricsSupport extends OutputMetricsUpdater with Logging {
     val outputMetrics: OutputMetrics
 
     val dataLengthCounter = new LongAdder
@@ -128,10 +131,21 @@ object OutputMetricsUpdater extends Logging {
 
     override private[metrics] def updateTaskMetrics(success: Boolean, count: Int, dataLength: Int): Unit = {
       if (success) {
+        val beforeRows = rowsCounter.longValue()
+        val beforeBytes = dataLengthCounter.longValue()
+
         dataLengthCounter.add(dataLength)
         rowsCounter.add(count)
-        outputMetrics.setBytesWritten(dataLengthCounter.longValue())
-        outputMetrics.setRecordsWritten(rowsCounter.longValue())
+
+        val afterRows = rowsCounter.longValue()
+        val afterBytes = dataLengthCounter.longValue()
+
+        outputMetrics.setBytesWritten(afterBytes)
+        outputMetrics.setRecordsWritten(afterRows)
+
+        logInfo(s"[DEBUG] OutputMetricsUpdater.updateTaskMetrics - Batch: +$count rows, +$dataLength bytes | Total: $afterRows rows (was $beforeRows), $afterBytes bytes (was $beforeBytes)")
+      } else {
+        logWarn(s"[DEBUG] OutputMetricsUpdater.updateTaskMetrics - Batch FAILED: count=$count, dataLength=$dataLength")
       }
     }
   }

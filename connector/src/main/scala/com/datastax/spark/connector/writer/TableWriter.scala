@@ -249,7 +249,7 @@ class TableWriter[T] private (
   private def writeInternal(asyncStatementWriter: AsyncStatementWriter[T], taskContext: TaskContext, data: Iterator[T]) {
     val updater = OutputMetricsUpdater(taskContext, writeConf)
     val tokenRanges = extractTokenRange(taskContext.partitionId())
-    logInfo(s"Writing ranges: ${tokenRanges}")
+    logInfo(s"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Writing ranges: ${tokenRanges}")
 
     val metricMonitoringWriter = asyncStatementWriter.copy(
         successHandler = Some(updater.batchFinished(success = true, _, _, _)),
@@ -257,19 +257,27 @@ class TableWriter[T] private (
 
     val rowIterator = new CountingIterator(data)
 
-    logDebug(s"Writing data partition to $keyspaceName.$tableName in batches of ${writeConf.batchSize}.")
+    logDebug(s"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Writing data partition to $keyspaceName.$tableName in batches of ${writeConf.batchSize}.")
+    logInfo(s"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Starting write loop")
 
+    var rowsProcessed = 0
     for (stmtToWrite <- rowIterator) {
       metricMonitoringWriter.write(stmtToWrite)
+      rowsProcessed += 1
     }
+
+    logInfo(s"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Write loop completed, processed $rowsProcessed rows")
+    logInfo(s"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Closing writer...")
 
     metricMonitoringWriter.close()
 
+    logInfo(s"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Writer closed")
+
     val duration = updater.finish() / 1000000000d
-    logInfo(f"Wrote ${rowIterator.count} rows to $keyspaceName.$tableName in $duration%.3f s.")
+    logInfo(f"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Wrote ${rowIterator.count} rows to $keyspaceName.$tableName in $duration%.3f s.")
 
     tokenRangeAcc.foreach(_.add(tokenRanges.toSet))
-    logInfo("Added token ranges to accumulator")
+    logInfo(s"[DEBUG] TableWriter.writeInternal - Partition ${taskContext.partitionId()}: Added token ranges to accumulator")
   }
 }
 

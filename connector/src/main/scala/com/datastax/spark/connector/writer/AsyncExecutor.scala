@@ -72,9 +72,13 @@ class AsyncExecutor[T, R](asyncAction: T => CompletionStage[R], maxConcurrentTas
         }
 
         private def onSuccess(result: R) {
+          logInfo(s"[DEBUG] AsyncExecutor.onSuccess - Task completed successfully")
           release()
           promise.success(result)
-          successHandler.foreach(_ (task, submissionTimestamp, executionTimestamp))
+          successHandler.foreach { handler =>
+            logInfo(s"[DEBUG] AsyncExecutor.onSuccess - Calling success handler")
+            handler(task, submissionTimestamp, executionTimestamp)
+          }
         }
 
         private def onFailure(throwable: Throwable) {
@@ -90,11 +94,14 @@ class AsyncExecutor[T, R](asyncAction: T => CompletionStage[R], maxConcurrentTas
               tryFuture()
 
             case otherException =>
-              logError("Failed to execute: " + task, otherException)
+              logError(s"[DEBUG] AsyncExecutor.onFailure - Failed to execute: $task", otherException)
               latestException = Some(throwable)
               release()
               promise.failure(throwable)
-              failureHandler.foreach(_ (task, submissionTimestamp, executionTimestamp))
+              failureHandler.foreach { handler =>
+                logError(s"[DEBUG] AsyncExecutor.onFailure - Calling failure handler")
+                handler(task, submissionTimestamp, executionTimestamp)
+              }
           }
         }
 

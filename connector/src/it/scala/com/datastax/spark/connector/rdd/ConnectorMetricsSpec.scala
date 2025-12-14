@@ -149,27 +149,56 @@ class ConnectorMetricsSpec extends SparkCassandraITFlatSpecBase with DefaultClus
   it should "properly measure amount of data written to Cassandra" in {
     stagesMetrics.clear()
     val rdd = ourSc.makeRDD(1 to 200, 16).map(x => (x, x))
+
+    println(s"[DEBUG] Created RDD with ${rdd.getNumPartitions} partitions (expecting 200 elements)")
+    println(s"[DEBUG] stagesMetrics queue size before saveToCassandra: ${stagesMetrics.size()}")
+
     rdd.saveToCassandra(ks, "leftjoin")
+
+    println(s"[DEBUG] saveToCassandra completed")
+    println(s"[DEBUG] stagesMetrics queue size after saveToCassandra: ${stagesMetrics.size()}")
 
     var totalRecordsWritten: Long = 0
     var totalBytesWritten: Long = 0
+    var pollCount = 0
 
     Eventually.eventually(Eventually.timeout(Span(20, Seconds))) {
-      Option(stagesMetrics.poll()).foreach { metrics =>
+      val polledMetrics = Option(stagesMetrics.poll())
+      polledMetrics.foreach { metrics =>
+        pollCount += 1
+        println(s"[DEBUG] Poll #$pollCount - Records: ${metrics.outputMetrics.recordsWritten}, Bytes: ${metrics.outputMetrics.bytesWritten}")
         totalRecordsWritten = totalRecordsWritten + metrics.outputMetrics.recordsWritten
         totalBytesWritten = totalBytesWritten + metrics.outputMetrics.bytesWritten
+        println(s"[DEBUG] Running totals - Records: $totalRecordsWritten, Bytes: $totalBytesWritten")
       }
+
+      println(s"[DEBUG] Remaining in queue: ${stagesMetrics.size()}")
+      println(s"[DEBUG] Checking assertion - Records: $totalRecordsWritten (expected 200), Bytes: $totalBytesWritten (expected ${200 * 8})")
 
       totalRecordsWritten should be(200)
       totalBytesWritten should be(200 * 8)
     }
+
+    println(s"[DEBUG] Test completed successfully - Total polls: $pollCount, Records: $totalRecordsWritten, Bytes: $totalBytesWritten")
   }
 }
 
 class ConnectorMetricsListener(conf: SparkConf) extends SparkListener {
   override def onStageCompleted(stageCompleted: SparkListenerStageCompleted): Unit = {
-    val metrics = stageCompleted.stageInfo.taskMetrics
-    stagesMetrics.offer(ConnectorMetricsListener.snapshotMetrics(metrics))
+    val stageInfo = stageCompleted.stageInfo
+    val metrics = stageInfo.taskMetrics
+    val snapshot = ConnectorMetricsListener.snapshotMetrics(metrics)
+
+    println(s"[DEBUG] ConnectorMetricsListener - Stage ${stageInfo.stageId} completed:")
+    println(s"[DEBUG]   Stage name: ${stageInfo.name}")
+    println(s"[DEBUG]   Num tasks: ${stageInfo.numTasks}")
+    println(s"[DEBUG]   Output records: ${snapshot.outputMetrics.recordsWritten}")
+    println(s"[DEBUG]   Output bytes: ${snapshot.outputMetrics.bytesWritten}")
+    println(s"[DEBUG]   Input records: ${snapshot.inputMetrics.recordsRead}")
+    println(s"[DEBUG]   Input bytes: ${snapshot.inputMetrics.bytesRead}")
+
+    stagesMetrics.offer(snapshot)
+    println(s"[DEBUG]   Queue size after offer: ${stagesMetrics.size()}")
   }
 }
 
