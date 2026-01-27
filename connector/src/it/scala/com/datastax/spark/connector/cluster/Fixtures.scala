@@ -153,6 +153,10 @@ trait AuthCluster extends SingleClusterFixture {
       Seq(sslConf.copy(dseConfiguration = sslConf.dseConfiguration ++ Map(
         "authentication_options.enabled" -> "true"
       )))
+    } else if (defaultConfig.scyllaEnabled) {
+      Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ Map(
+        "authenticator" -> "PasswordAuthenticator"
+      )))
     } else {
       if (defaultConfig.getCassandraVersion.compareTo(CcmConfig.V5_0_0) >= 0) {
         Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ Map(
@@ -222,6 +226,33 @@ trait CETCluster extends DefaultCluster
 trait CSTCluster extends DefaultCluster
 
 trait PSTCluster extends DefaultCluster
+
+/** Marker trait for tests that are specific to Scylla.
+  * Use this to conditionally skip tests that rely on Cassandra-specific features
+  * or to enable Scylla-specific test behavior. */
+trait ScyllaFixture extends SingleClusterFixture {
+
+  /** Returns true if running against Scylla */
+  def isScylla: Boolean = defaultConfig.scyllaEnabled
+
+  /** Skip test if running against Scylla */
+  def assumeNotScylla(reason: String = "Not supported on Scylla"): Unit = {
+    if (isScylla) {
+      throw new org.scalatest.exceptions.TestCanceledException(reason, 0)
+    }
+  }
+
+  /** Skip test if not running against Scylla */
+  def assumeScylla(reason: String = "Scylla-only test"): Unit = {
+    if (!isScylla) {
+      throw new org.scalatest.exceptions.TestCanceledException(reason, 0)
+    }
+  }
+}
+
+/** Default cluster with Scylla-awareness. Most tests should extend this
+  * instead of DefaultCluster when they need Scylla compatibility. */
+trait ScyllaAwareCluster extends DefaultCluster with ScyllaFixture
 
 /** Fixture marker that instructs test framework to execute the marked test within a separated process/JVM. */
 trait SeparateJVM extends Fixture
