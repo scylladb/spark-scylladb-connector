@@ -235,8 +235,14 @@ trait ScyllaFixture extends SingleClusterFixture {
   /** Returns true if running against Scylla */
   def isScylla: Boolean = defaultConfig.scyllaEnabled
 
-  /** Skip test if running against Scylla */
-  def assumeNotScylla(reason: String = "Not supported on Scylla"): Unit = {
+  /** Skip test if running against Scylla.
+    * @param reason Must start with "scylladb/spark-scylladb-connector#" or "scylladb/scylladb#"
+    *               followed by issue number and description */
+  def assumeNotScylla(reason: String): Unit = {
+    require(
+      reason.startsWith("scylladb/spark-scylladb-connector#") || reason.startsWith("scylladb/scylladb#"),
+      s"assumeNotScylla reason must reference a GitHub issue (scylladb/spark-scylladb-connector#N or scylladb/scylladb#N), got: $reason"
+    )
     if (isScylla) {
       throw new org.scalatest.exceptions.TestCanceledException(reason, 0)
     }
