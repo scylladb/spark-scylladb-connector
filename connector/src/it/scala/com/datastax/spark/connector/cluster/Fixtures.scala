@@ -153,6 +153,10 @@ trait AuthCluster extends SingleClusterFixture {
       Seq(sslConf.copy(dseConfiguration = sslConf.dseConfiguration ++ Map(
         "authentication_options.enabled" -> "true"
       )))
+    } else if (defaultConfig.scyllaEnabled) {
+      Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ Map(
+        "authenticator" -> "PasswordAuthenticator"
+      )))
     } else {
       if (defaultConfig.getCassandraVersion.compareTo(CcmConfig.V5_0_0) >= 0) {
         Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ Map(
