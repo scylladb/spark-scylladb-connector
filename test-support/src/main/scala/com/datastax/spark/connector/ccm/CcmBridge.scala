@@ -76,7 +76,12 @@ class CcmBridge(config: CcmConfig) extends AutoCloseable {
   }
 
   def refreshSizeEstimates(n: Int): Unit = {
-    nodetool(n, "refreshsizeestimates")
+    // Scylla does not support nodetool refreshsizeestimates
+    if (!config.scyllaEnabled) {
+      nodetool(n, "refreshsizeestimates")
+    } else {
+      CcmBridge.logger.info("Skipping refreshsizeestimates - not supported on Scylla")
+    }
   }
 
   def flush(n: Int): Unit = {

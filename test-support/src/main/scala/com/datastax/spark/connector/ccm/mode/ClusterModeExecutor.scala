@@ -32,6 +32,7 @@ private[ccm] trait ClusterModeExecutor {
   protected val dir: Path
 
   protected val javaVersion: Option[Int] = config.javaVersion match {
+    case None if config.scyllaEnabled => Some(8)
     case None if config.dseEnabled => Some(8)
     case None if config.version.getMajor < 5 => Some(8)
     case None => Some(11)
