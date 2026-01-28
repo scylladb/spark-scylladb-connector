@@ -37,6 +37,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  lint:
+    name: "Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "11"
+
+      - name: Restore SBT cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.sbt
+            ~/.ivy2/cache
+            ~/.cache/coursier
+          key: sbt-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
+          restore-keys: |
+            sbt-${{ runner.os }}-
+
+      - name: Run scalastyle
+        run: make lint
+
   prepare:
     name: "Prepare test matrix"
     runs-on: ubuntu-latest

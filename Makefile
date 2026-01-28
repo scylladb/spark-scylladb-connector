@@ -4,7 +4,7 @@ SHELL := bash
 .PHONY: sbt clean test-unit test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
         download-cassandra download-scylla install-cassandra-ccm install-scylla-ccm \
-        generate-test-matrix
+        generate-test-matrix lint lint-fix
 
 MAKEFILE_PATH := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 SCYLLA_VERSION ?= LATEST
@@ -269,6 +269,12 @@ test-integration-scylla: resolve-scala-version resolve-scylla-version
 
 test-unit: resolve-scala-version
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) test
+
+lint: resolve-scala-version
+	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) "scalafix --check" "Test/scalafix --check" "IntegrationTest/scalafix --check"
+
+lint-fix: resolve-scala-version
+	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) scalafix Test/scalafix IntegrationTest/scalafix
 
 clean:
 	@$(SBT_BIN) clean

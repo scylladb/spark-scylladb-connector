@@ -10,6 +10,8 @@ lazy val supportedScalaVersions = List(scala212, scala213)
 // factor out common settings
 ThisBuild / scalaVersion := scala212
 ThisBuild / scalacOptions ++= Seq("-target:jvm-1.8")
+ThisBuild / semanticdbEnabled := true
+ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
 // Publishing Info
 ThisBuild / homepage := Some(url("https://github.com/scylladb/spark-scylladb-connector"))
