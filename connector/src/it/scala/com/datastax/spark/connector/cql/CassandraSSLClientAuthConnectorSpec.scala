@@ -19,13 +19,16 @@
 package com.datastax.spark.connector.cql
 
 import com.datastax.spark.connector.SparkCassandraITFlatSpecBase
-import com.datastax.spark.connector.cluster.SSLCluster
+import com.datastax.spark.connector.cluster.{SSLCluster, ScyllaFixture}
 
-class CassandraSSLClientAuthConnectorSpec extends SparkCassandraITFlatSpecBase with SSLCluster {
+class CassandraSSLClientAuthConnectorSpec extends SparkCassandraITFlatSpecBase with SSLCluster with ScyllaFixture {
+
+  override def isScylla: Boolean = defaultConfig.scyllaEnabled
 
   override lazy val conn = CassandraConnector(defaultConf)
 
   "A CassandraConnector" should "be able to use a secure connection when using native protocol" in {
+    assumeNotScylla("scylladb/spark-scylladb-connector#29: SSL configuration format differs in Scylla")
     conn.withSessionDo { session =>
       assert(session !== null)
       assert(session.isClosed === false)

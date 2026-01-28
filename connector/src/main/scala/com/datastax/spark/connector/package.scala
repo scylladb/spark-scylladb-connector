@@ -95,7 +95,7 @@ package object connector {
     rdd: CassandraTableScanRDD[(K, V)]): CassandraTableScanPairRDDFunctions[K, V] =
     new CassandraTableScanPairRDDFunctions(rdd)
 
-  implicit class ColumnNameFunctions(val columnName: String) extends AnyVal {
+  implicit class ColumnNameFunctions(private val columnName: String) extends AnyVal {
     def writeTime: WriteTime = WriteTime(columnName)
     def ttl: TTL = TTL(columnName)
   }

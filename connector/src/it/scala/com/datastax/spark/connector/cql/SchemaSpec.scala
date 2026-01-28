@@ -93,7 +93,9 @@ class SchemaSpec extends SparkCassandraITWordSpecBase with DefaultCluster {
   "A KeyspaceDef" should {
     "allow to get a list of tables in the given keyspace" in {
       val keyspace = schema.keyspaceByName(ks)
-      keyspace.tables.map(_.tableName) shouldBe Set("test")
+      // Filter out index backing tables - Scylla exposes them (*_index suffix), Cassandra hides them
+      val tableNames = keyspace.tables.map(_.tableName).filterNot(_.endsWith("_index"))
+      tableNames shouldBe Set("test")
     }
     "allow to look up a table by name" in {
       val keyspace = schema.keyspaceByName(ks)

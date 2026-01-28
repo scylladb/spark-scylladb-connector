@@ -203,7 +203,7 @@ class CassandraDataFrameSpec extends SparkCassandraITFlatSpecBase with DefaultCl
 
   }
 
-  it should " be able to create a customized C* schema from a table" in {
+  it should " be able to create a customized C* schema from a table" in notScylla("scylladb/spark-scylladb-connector#25: Clustering order on Scylla always reported as ASC") {
     val df = spark
       .read
       .format("org.apache.spark.sql.cassandra")

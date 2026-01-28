@@ -72,7 +72,7 @@ class CassandraMergeJoinRDD[L,R](
     }
   }
 
-  def checkValidMergeJoin() {
+  def checkValidMergeJoin(): Unit = {
     val leftPartitionKeyTypes = getPartitionKey(
       leftScanRDD.connector,
       leftScanRDD.keyspaceName,
