@@ -66,18 +66,18 @@ class AsyncExecutor[T, R](asyncAction: T => CompletionStage[R], maxConcurrentTas
       }
 
       value.get.whenComplete(new BiConsumer[R, Throwable] {
-        private def release() {
+        private def release(): Unit = {
           semaphore.release()
           pendingFutures.remove(promise.future)
         }
 
-        private def onSuccess(result: R) {
+        private def onSuccess(result: R): Unit = {
           release()
           promise.success(result)
           successHandler.foreach(_ (task, submissionTimestamp, executionTimestamp))
         }
 
-        private def onFailure(throwable: Throwable) {
+        private def onFailure(throwable: Throwable): Unit = {
           throwable match {
             case e: AllNodesFailedException if e.getAllErrors.asScala.values.exists(_.isInstanceOf[BusyConnectionException]) =>
               logTrace("BusyConnectionException ... Retrying")
@@ -118,7 +118,7 @@ class AsyncExecutor[T, R](asyncAction: T => CompletionStage[R], maxConcurrentTas
     /** Waits until the tasks being currently executed get completed.
     * It will not wait for tasks scheduled for execution during this method call,
     * nor tasks for which the [[executeAsync]] method did not complete. */
-  def waitForCurrentlyExecutingTasks() {
+  def waitForCurrentlyExecutingTasks(): Unit = {
     for ((future, _) <- pendingFutures.snapshot())
       Try(Await.result(future, Duration.Inf))
   }

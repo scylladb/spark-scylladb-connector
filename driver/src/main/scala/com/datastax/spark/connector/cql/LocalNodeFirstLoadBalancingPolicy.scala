@@ -140,7 +140,7 @@ class LocalNodeFirstLoadBalancingPolicy(context: DriverContext, profileName: Str
     new SimpleQueryPlan(nodes: _*)
   }
 
-  override def onAdd(node: Node) {
+  override def onAdd(node: Node): Unit = {
     // The added host might be a "better" version of a host already in the set.
     // The nodes added in the init call don't have DC and rack set.
     // Therefore we want to really replace the object now, to get full information on DC:
@@ -149,7 +149,7 @@ class LocalNodeFirstLoadBalancingPolicy(context: DriverContext, profileName: Str
     distanceReporter.setDistance(node, distance(node))
   }
 
-  override def onRemove(node: Node) {
+  override def onRemove(node: Node): Unit = {
     nodes -= node
   }
 

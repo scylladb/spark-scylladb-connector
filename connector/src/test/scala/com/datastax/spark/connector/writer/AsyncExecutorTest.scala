@@ -33,7 +33,7 @@ import scala.util.{Failure, Success}
 class AsyncExecutorTest {
 
   @Test
-  def test() {
+  def test(): Unit = {
     val taskCount = 20
     val maxParallel = 5
 
@@ -77,7 +77,7 @@ class AsyncExecutorTest {
   }
 
   @Test
-  def testGracefullyHandleCqlSessionExecuteExceptions() {
+  def testGracefullyHandleCqlSessionExecuteExceptions(): Unit = {
     val executor = new AsyncExecutor[Statement[_], AsyncResultSet](
       _ => {
         // simulate exception returned by session.executeAsync() (not future)

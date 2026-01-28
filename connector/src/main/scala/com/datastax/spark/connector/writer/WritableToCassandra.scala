@@ -102,6 +102,6 @@ abstract class WritableToCassandra[T] {
                           deleteColumns: ColumnSelector,
                           keyColumns: ColumnSelector,
                           writeConf: WriteConf)
-                         (implicit connector: CassandraConnector, rwf: RowWriterFactory[T])
+                         (implicit connector: CassandraConnector, rwf: RowWriterFactory[T]): Unit
 
 }

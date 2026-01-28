@@ -54,12 +54,12 @@ trait Assertions {
    * If no timeout is given, take it from the innermost enclosing `within`
    * block.
    */
-  def awaitCond(p: => Boolean, max: Duration = 3.seconds, interval: Duration = 100.millis, message: String = "") {
+  def awaitCond(p: => Boolean, max: Duration = 3.seconds, interval: Duration = 100.millis, message: String = ""): Unit = {
     val _max = remainingOrDilated(max)
     val stop = now + _max
 
     @tailrec
-    def poll(t: Duration) {
+    def poll(t: Duration): Unit = {
       if (!p) {
         assert(now < stop, s"timeout ${_max} expired: $message")
         Thread.sleep(t.toMillis)

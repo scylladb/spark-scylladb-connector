@@ -71,7 +71,7 @@ class LocalNodeFirstLoadBalancingPolicySpec extends FlatSpec with Matchers with 
   private val profile = mock[DriverExecutionProfile]
   private val metaManager = mock[MetadataManager]
 
-  override def beforeEach() {
+  override def beforeEach(): Unit = {
     when(profile.getString(m.eq(LOAD_BALANCING_LOCAL_DATACENTER))).thenReturn(dc)
     when(profile.getString(m.eq(LOAD_BALANCING_LOCAL_DATACENTER), m.any())).thenReturn(dc)
 
