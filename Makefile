@@ -4,7 +4,7 @@ SHELL := bash
 .PHONY: sbt clean test-unit test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
         download-cassandra download-scylla install-cassandra-ccm install-scylla-ccm \
-        generate-test-matrix lint lint-fix
+        generate-test-matrix lint lint-fix generate-test-certs
 
 MAKEFILE_PATH := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 SCYLLA_VERSION ?= LATEST
@@ -256,11 +256,11 @@ download-scylla: .prepare-scylla-ccm resolve-scylla-version
 	ccm create ccm_1 -i 127.0.254. -n 1:0 -v "$$SCYLLA_VERSION_RESOLVED" --scylla --config-dir=/tmp/download.ccm
 	rm -rf /tmp/download.ccm
 
-test-integration-cassandra: resolve-scala-version resolve-cassandra-version
+test-integration-cassandra: resolve-scala-version resolve-cassandra-version generate-test-certs
 	@CASSANDRA_VERSION_RESOLVED=$${CASSANDRA_VERSION_RESOLVED:-$$(cat "${CASSANDRA_VERSION_FILE}")}
 	JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" CCM_CASSANDRA_VERSION="$$CASSANDRA_VERSION_RESOLVED" $(SBT_CMD) test it:test
 
-test-integration-scylla: resolve-scala-version resolve-scylla-version
+test-integration-scylla: resolve-scala-version resolve-scylla-version generate-test-certs
 	@SCYLLA_VERSION_RESOLVED=$${SCYLLA_VERSION_RESOLVED:-$$(cat "${SCYLLA_VERSION_FILE}")}
 	if [[ "$$SCYLLA_VERSION_RESOLVED" =~ ^[0-9]{4}\. ]]; then
 		SCYLLA_VERSION_RESOLVED="release:$$SCYLLA_VERSION_RESOLVED"
@@ -276,5 +276,11 @@ lint: resolve-scala-version
 lint-fix: resolve-scala-version
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) scalafix Test/scalafix IntegrationTest/scalafix
 
+TLS_CERT_DIR := $(MAKEFILE_PATH)/test-support/src/main/resources/tls
+
+generate-test-certs:
+	@$(MAKEFILE_PATH)/scripts/generate-test-certs.sh "$(TLS_CERT_DIR)"
+
 clean:
 	@$(SBT_BIN) clean
+	@rm -rf "$(TLS_CERT_DIR)"
