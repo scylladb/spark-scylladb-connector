@@ -43,3 +43,6 @@ claude.log
 claude_history.json
 claude_config.json
 CLAUDE.md
+
+# Generated TLS certificates for integration tests
+test-support/src/main/resources/tls/
