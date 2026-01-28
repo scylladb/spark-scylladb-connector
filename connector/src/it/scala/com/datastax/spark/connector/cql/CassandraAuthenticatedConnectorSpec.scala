@@ -37,7 +37,6 @@ class CassandraAuthenticatedConnectorSpec extends SparkCassandraITFlatSpecBase w
 
 
   "A CassandraConnector" should "authenticate with username and password when using native protocol for valid credentials provided by AuthCluster" in {
-    assumeNotScylla("scylladb/spark-scylladb-connector#28: SSL/Auth configuration format differs in Scylla")
     val conn2 = CassandraConnector(authConf)
     conn2.withSessionDo { session =>
       assert(session !== null)
@@ -46,7 +45,6 @@ class CassandraAuthenticatedConnectorSpec extends SparkCassandraITFlatSpecBase w
   }
 
   it should "authenticate valid username/password for provided credentials" in {
-    assumeNotScylla("scylladb/spark-scylladb-connector#28: SSL/Auth configuration format differs in Scylla")
     val conn2 = new CassandraConnector(defaultConnConf.copy(
       contactInfo = defaultContactInfo.copy(authConf = PasswordAuthConf("cassandra", "cassandra"))
     ))
@@ -54,7 +52,6 @@ class CassandraAuthenticatedConnectorSpec extends SparkCassandraITFlatSpecBase w
   }
 
   it should "fail to authenticate invalid username/password" in {
-    assumeNotScylla("scylladb/spark-scylladb-connector#28: SSL/Auth configuration format differs in Scylla")
     val conn2 = new CassandraConnector(defaultConnConf.copy(
       contactInfo = defaultContactInfo.copy(authConf = PasswordAuthConf("cassandra", "wrong_passoword"))
     ))
@@ -69,8 +66,6 @@ class CassandraAuthenticatedConnectorSpec extends SparkCassandraITFlatSpecBase w
   }
 
   "A DataFrame" should "read and write data with valid auth" in {
-    assumeNotScylla("scylladb/spark-scylladb-connector#28: SSL/Auth configuration format differs in Scylla")
-
     spark.conf.set(DefaultAuthConfFactory.UserNameParam.name, "cassandra")
     spark.conf.set(DefaultAuthConfFactory.PasswordParam.name, "cassandra")
 
