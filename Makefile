@@ -31,6 +31,15 @@ CCM_CASSANDRA_VERSION ?= trunk
 CCM_SCYLLA_REPO ?= github.com/scylladb/scylla-ccm
 CCM_SCYLLA_VERSION ?= master
 
+# When building with Java 17+, CCM needs a separate JDK to start older Cassandra.
+# Set CCM_JAVA_HOME to point to the JDK that CCM should use to start the database:
+#   - Cassandra 3.x/4.x: Java 8
+#   - Cassandra 5.x: Java 11
+# In CI this is handled by .github/workflows/integration-tests.yml.
+ifdef CCM_JAVA_HOME
+export CCM_JAVA_HOME
+endif
+
 ifeq (${CCM_CONFIG_DIR},)
 	CCM_CONFIG_DIR = ~/.ccm
 endif

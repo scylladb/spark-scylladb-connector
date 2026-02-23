@@ -121,12 +121,20 @@ object CcmBridge {
       val streamHandler = new PumpStreamHandler(outStream, errStream)
       executor.setStreamHandler(streamHandler)
       executor.setWatchdog(watchDog)
-      val env =
-        if (sys.env.contains("CCM_JAVA_HOME")) {
-          sys.env + ("JAVA_HOME" -> sys.env("CCM_JAVA_HOME"))
+      val env = {
+        val base = if (sys.env.contains("CCM_JAVA_HOME")) {
+          val ccmJavaHome = sys.env("CCM_JAVA_HOME")
+          // Prepend CCM Java's bin to PATH so `java` on PATH matches JAVA_HOME.
+          // CCM validates that PATH's java version matches JAVA_HOME.
+          val updatedPath = s"$ccmJavaHome/bin${java.io.File.pathSeparator}${sys.env.getOrElse("PATH", "")}"
+          sys.env + ("JAVA_HOME" -> ccmJavaHome) + ("PATH" -> updatedPath)
         } else {
           sys.env
         }
+        // Clear JAVA_TOOL_OPTIONS to prevent Java 17+ flags (e.g. --add-opens)
+        // from being passed to older JVMs that don't understand them.
+        base - "JAVA_TOOL_OPTIONS" - "_JAVA_OPTIONS"
+      }
 
       val retValue = executor.execute(cli, env.asJava)
       if (retValue != 0) {

@@ -31,7 +31,7 @@ import com.datastax.oss.driver.internal.core.context.InternalDriverContext
 import com.datastax.oss.driver.internal.core.metadata.MetadataManager
 import com.datastax.spark.connector.util.DriverUtil
 import org.mockito.Mockito._
-import org.mockito.{Matchers => m}
+import org.mockito.{ArgumentMatchers => m}
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar
 
