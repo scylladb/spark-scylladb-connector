@@ -296,26 +296,12 @@ clean:
 	@rm -rf "$(TLS_CERT_DIR)"
 
 # Release variables
-PGP_PASSPHRASE ?=
-PGP_SECRET ?=
-SONATYPE_USERNAME ?=
-SONATYPE_PASSWORD ?=
 RELEASE_SKIP_TESTS ?=
 RELEASE_TARGET_TAG ?=
 RELEASE_LOG_DIR := /tmp/spark-connector-release-logs
 
-.require-release-prepare-env:
-	@if [[ -z "${PGP_SECRET}" ]]; then
-		echo "PGP_SECRET is empty"
-		exit 1
-	fi
-
 .require-release-env:
-	@if [[ -z "${PGP_SECRET}" ]]; then
-		echo "PGP_SECRET is empty"
-		exit 1
-	fi
-	if [[ -z "${SONATYPE_USERNAME}" ]]; then
+	@if [[ -z "${SONATYPE_USERNAME}" ]]; then
 		echo "SONATYPE_USERNAME is empty"
 		exit 1
 	fi
@@ -324,7 +310,7 @@ RELEASE_LOG_DIR := /tmp/spark-connector-release-logs
 		exit 1
 	fi
 
-release-prepare: .require-release-prepare-env
+release-prepare:
 	@CURRENT_VERSION=$$(grep -oP '(?<=:= ")[^"]+' version.sbt)
 	if [[ ! "$$CURRENT_VERSION" =~ -SNAPSHOT$$ ]]; then
 		echo "Current version $$CURRENT_VERSION is not a SNAPSHOT version"

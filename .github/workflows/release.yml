@@ -50,10 +50,12 @@ jobs:
           git config user.name "ScyllaDB Promoter"
           git config user.email "github-promoter@scylladb.com"
 
-      - name: Prepare release
+      - name: Import GPG key
         env:
-          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
+        run: echo "$PGP_SECRET" | base64 --decode | gpg --import --no-tty --batch --yes
+
+      - name: Prepare release
         run: make release-prepare
 
       - name: Perform release
@@ -61,7 +63,6 @@ jobs:
         env:
           RELEASE_SKIP_TESTS: ${{ inputs.skip-tests }}
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          PGP_SECRET: ${{ secrets.PGP_SECRET }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
         run: make release
@@ -71,7 +72,6 @@ jobs:
         env:
           RELEASE_SKIP_TESTS: ${{ inputs.skip-tests }}
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          PGP_SECRET: ${{ secrets.PGP_SECRET }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
         run: make release-dry-run
