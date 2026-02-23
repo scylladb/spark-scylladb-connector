@@ -349,11 +349,11 @@ release: .require-release-env
 	echo "Performing release for tag $$RELEASE_TAG"
 	git checkout "$$RELEASE_TAG"
 	mkdir -p "$(RELEASE_LOG_DIR)"
-	SBT_OPTS=""
+	SBT_CMDS="+publishSigned sonatypeBundleRelease"
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
-		SBT_OPTS="set ThisBuild / test := {}"
+		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
 	fi
-	$(SBT_BIN) $$SBT_OPTS +publishSigned sonatypeBundleRelease \
+	eval $(SBT_BIN) $$SBT_CMDS \
 		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
 		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
 
@@ -362,11 +362,11 @@ release-dry-run: .require-release-env
 	echo "Performing dry-run release for tag $$RELEASE_TAG"
 	git checkout "$$RELEASE_TAG"
 	mkdir -p "$(RELEASE_LOG_DIR)"
-	SBT_OPTS=""
+	SBT_CMDS="+publishSigned"
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
-		SBT_OPTS="set ThisBuild / test := {}"
+		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
 	fi
-	$(SBT_BIN) $$SBT_OPTS +publishSigned \
+	eval $(SBT_BIN) $$SBT_CMDS \
 		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
 		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
 
