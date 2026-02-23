@@ -20,6 +20,7 @@ package org.apache.spark.sql
 
 import scala.language.implicitConversions
 import com.datastax.spark.connector.util.{ConfigParameter, DeprecatedConfigParameter}
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.streaming.DataStreamWriter
 
 package object cassandra {
@@ -196,8 +197,14 @@ package object cassandra {
     }
   }
 
+  private def columnToExpr(col: Column): Expression =
+    org.apache.spark.sql.classic.ColumnConversions.expression(col)
+
+  private def exprToColumn(expr: Expression): Column =
+    org.apache.spark.sql.classic.ClassicConversions.ColumnConstructorExt(Column).apply(expr)
+
   def ttl(column: Column): Column = {
-      Column(CassandraTTL(column.expr))
+      exprToColumn(CassandraTTL(columnToExpr(column)))
   }
 
   def ttl(column: String): Column = {
@@ -205,7 +212,7 @@ package object cassandra {
   }
 
   def writeTime(column: Column): Column = {
-      Column(CassandraWriteTime(column.expr))
+      exprToColumn(CassandraWriteTime(columnToExpr(column)))
   }
 
   def writeTime(column: String): Column = {

@@ -224,12 +224,14 @@ object CassandraSourceRelation extends Logging {
   }
 
   def setDirectJoin[K: Encoder](ds: Dataset[K], directJoinSetting: DirectJoinSetting = AlwaysOn): Dataset[K] = {
-    val oldPlan = ds.queryExecution.logical
-    Dataset[K](ds.sparkSession,
+    val classicDs = ds.asInstanceOf[org.apache.spark.sql.classic.Dataset[K]]
+    val classicSession = classicDs.sparkSession
+    val oldPlan = classicDs.queryExecution.logical
+    org.apache.spark.sql.classic.Dataset[K](classicSession,
       oldPlan.transform {
         case ds@DataSourceV2Relation(_: CassandraTable, _, _, _, options) =>
           ds.copy(options = applyDirectJoinSetting(options, directJoinSetting))
-        case ds@DataSourceV2ScanRelation(_: CassandraTable, scan: CassandraScan, _, _, _) =>
+        case ds@DataSourceV2ScanRelation(_: DataSourceV2Relation, scan: CassandraScan, _, _, _) =>
           ds.copy(scan = scan.copy(consolidatedConf = applyDirectJoinSetting(scan.consolidatedConf, directJoinSetting)))
       }
     )

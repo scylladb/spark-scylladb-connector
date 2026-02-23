@@ -86,13 +86,6 @@ object Dependencies
       TestCommon.esriGeometry % "test,it").map(_.logbackExclude())
   }
 
-  // Required for metrics
-  object Jetty {
-    val jettyServer       = "org.eclipse.jetty"       % "jetty-server"            % SparkJetty % "provided"
-    val jettyServlet      = "org.eclipse.jetty"       % "jetty-servlet"           % SparkJetty % "provided"
-
-    val dependencies = Seq(jettyServer, jettyServlet)
-  }
 
   object Driver {
     val driverCore = "com.scylladb" % "java-driver-core-shaded" % ScyllaJavaDriver driverCoreExclude()
@@ -106,15 +99,9 @@ object Dependencies
   }
 
   object Compatibility {
-    val scalaCompat = "org.scala-lang.modules" %% "scala-collection-compat" % Versions.ScalaCompat
     val parallelCollections = "org.scala-lang.modules" %% "scala-parallel-collections" % Versions.ParallelCollections
 
-    def dependencies(version: String): Seq[ModuleID] = {
-      CrossVersion.partialVersion(version) match {
-        case Some((2, scalaMajor)) if scalaMajor == 13 => Seq(scalaCompat, parallelCollections)
-        case _ => Seq(scalaCompat)
-      }
-    }
+    val dependencies = Seq(parallelCollections)
   }
 
   object TestDriver {
