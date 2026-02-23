@@ -56,7 +56,8 @@ object Dependencies
   }
 
   object TestCommon {
-    val mockito = "org.mockito" % "mockito-all" % Mockito
+    val mockito = "org.mockito" % "mockito-core" % Mockito
+    val mockitoInline = "org.mockito" % "mockito-inline" % Mockito
     val junit = "junit" % "junit" % JUnit
     val junitInterface = "com.novocode" % "junit-interface" % JUnitInterface
     val scalaTest = "org.scalatest" %% "scalatest" % ScalaTest
@@ -79,6 +80,7 @@ object Dependencies
       TestCommon.driverMapperProcessor % "test,it" driverCoreExclude(),
       TestCommon.scalaTest % "test,it",
       TestCommon.mockito % "test,it",
+      TestCommon.mockitoInline % "test,it",
       TestCommon.junit % "test,it",
       TestCommon.junitInterface % "test,it",
       TestCommon.esriGeometry % "test,it").map(_.logbackExclude())
@@ -119,6 +121,7 @@ object Dependencies
     val dependencies = Seq(
       TestCommon.scalaTest % "test",
       TestCommon.mockito % "test",
+      TestCommon.mockitoInline % "test",
       TestCommon.junit % "test",
       TestCommon.junitInterface % "test",
       TestCommon.driverMapperProcessor % "test" driverCoreExclude()

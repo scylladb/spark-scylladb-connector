@@ -253,7 +253,7 @@ columname will be used to set the writetime for that row.</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.connection.ssl.enabledAlgorithms</code></td>
-  <td>Set(TLS_RSA_WITH_AES_128_CBC_SHA, TLS_RSA_WITH_AES_256_CBC_SHA)</td>
+  <td>Set(TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, TLS_RSA_WITH_AES_128_CBC_SHA, TLS_RSA_WITH_AES_256_CBC_SHA)</td>
   <td>SSL cipher suites</td>
 </tr>
 <tr>
