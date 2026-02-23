@@ -4,7 +4,8 @@ SHELL := bash
 .PHONY: sbt clean test-unit test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
         download-cassandra download-scylla install-cassandra-ccm install-scylla-ccm \
-        generate-test-matrix lint lint-fix generate-test-certs
+        generate-test-matrix lint lint-fix generate-test-certs \
+        release-prepare release release-dry-run checkout-one-commit-before
 
 MAKEFILE_PATH := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 SCYLLA_VERSION ?= LATEST
@@ -293,3 +294,86 @@ generate-test-certs:
 clean:
 	@$(SBT_BIN) clean
 	@rm -rf "$(TLS_CERT_DIR)"
+
+# Release variables
+PGP_PASSPHRASE ?=
+PGP_SECRET ?=
+SONATYPE_USERNAME ?=
+SONATYPE_PASSWORD ?=
+RELEASE_SKIP_TESTS ?=
+RELEASE_TARGET_TAG ?=
+RELEASE_LOG_DIR := /tmp/spark-connector-release-logs
+
+.require-release-prepare-env:
+	@if [[ -z "${PGP_SECRET}" ]]; then
+		echo "PGP_SECRET is empty"
+		exit 1
+	fi
+
+.require-release-env:
+	@if [[ -z "${PGP_SECRET}" ]]; then
+		echo "PGP_SECRET is empty"
+		exit 1
+	fi
+	if [[ -z "${SONATYPE_USERNAME}" ]]; then
+		echo "SONATYPE_USERNAME is empty"
+		exit 1
+	fi
+	if [[ -z "${SONATYPE_PASSWORD}" ]]; then
+		echo "SONATYPE_PASSWORD is empty"
+		exit 1
+	fi
+
+release-prepare: .require-release-prepare-env
+	@CURRENT_VERSION=$$(grep -oP '(?<=:= ")[^"]+' version.sbt)
+	if [[ ! "$$CURRENT_VERSION" =~ -SNAPSHOT$$ ]]; then
+		echo "Current version $$CURRENT_VERSION is not a SNAPSHOT version"
+		exit 1
+	fi
+	RELEASE_VERSION=$${CURRENT_VERSION%-SNAPSHOT}
+	echo "Preparing release version $$RELEASE_VERSION"
+	echo 'ThisBuild / version := "'"$$RELEASE_VERSION"'"' > version.sbt
+	git add version.sbt
+	git commit -m "[release] prepare release $$RELEASE_VERSION"
+	git tag -a "v$$RELEASE_VERSION" -m "Release $$RELEASE_VERSION"
+	IFS='.' read -ra parts <<< "$$RELEASE_VERSION"
+	NEXT_PATCH=$$(( $${parts[2]} + 1 ))
+	NEXT_VERSION="$${parts[0]}.$${parts[1]}.$$NEXT_PATCH-SNAPSHOT"
+	echo 'ThisBuild / version := "'"$$NEXT_VERSION"'"' > version.sbt
+	git add version.sbt
+	git commit -m "[release] prepare for next development iteration"
+	echo "Release $$RELEASE_VERSION prepared. Next development version: $$NEXT_VERSION"
+
+release: .require-release-env
+	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
+	echo "Performing release for tag $$RELEASE_TAG"
+	git checkout "$$RELEASE_TAG"
+	mkdir -p "$(RELEASE_LOG_DIR)"
+	SBT_OPTS=""
+	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
+		SBT_OPTS="set ThisBuild / test := {}"
+	fi
+	$(SBT_BIN) $$SBT_OPTS +publishSigned sonatypeBundleRelease \
+		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
+		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+
+release-dry-run: .require-release-env
+	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
+	echo "Performing dry-run release for tag $$RELEASE_TAG"
+	git checkout "$$RELEASE_TAG"
+	mkdir -p "$(RELEASE_LOG_DIR)"
+	SBT_OPTS=""
+	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
+		SBT_OPTS="set ThisBuild / test := {}"
+	fi
+	$(SBT_BIN) $$SBT_OPTS +publishSigned \
+		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
+		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+
+checkout-one-commit-before:
+	@if [[ "${RELEASE_TARGET_TAG}" == v* ]]; then
+		echo "Checking out one commit before ${RELEASE_TARGET_TAG}"
+		git fetch --prune --unshallow || git fetch --prune || true
+		git checkout ${RELEASE_TARGET_TAG}~1
+		git tag -d ${RELEASE_TARGET_TAG}
+	fi
