@@ -1,5 +1,6 @@
 SHELL := bash
 .ONESHELL:
+.SHELLFLAGS := -ec
 
 .PHONY: sbt clean compile test-unit test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
