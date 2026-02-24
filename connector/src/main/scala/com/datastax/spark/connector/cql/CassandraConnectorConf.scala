@@ -75,6 +75,7 @@ case class CassandraConnectorConf(
   remoteConnectionsPerExecutor: Option[Int] = CassandraConnectorConf.RemoteConnectionsPerExecutorParam.default,
   compression: String = CassandraConnectorConf.CompressionParam.default,
   queryRetryCount: Int = CassandraConnectorConf.QueryRetryParam.default,
+  queryRetryMaxRetries: Int = CassandraConnectorConf.QueryRetryMaxRetriesParam.default,
   connectTimeoutMillis: Int = CassandraConnectorConf.ConnectionTimeoutParam.default,
   readTimeoutMillis: Int = CassandraConnectorConf.ReadTimeoutParam.default,
   connectionFactory: CassandraConnectionFactory = DefaultConnectionFactory,
@@ -235,6 +236,15 @@ object CassandraConnectorConf extends Logging {
       """Number of times to retry a timed-out query
         |Setting this to -1 means unlimited retries
       """.stripMargin)
+
+  val QueryRetryMaxRetriesParam = ConfigParameter[Int](
+    name = "spark.cassandra.query.retry.maxRetries",
+    section = ReferenceSection,
+    default = 10,
+    description =
+      """Maximum number of retries for a failed query due to transient errors
+        |(NodeUnavailableException, BusyConnectionException, OverloadedException).
+        |Set to 0 to disable retries.""".stripMargin)
 
   val ReadTimeoutParam = ConfigParameter[Int](
     name = "spark.cassandra.read.timeoutMS",
@@ -437,6 +447,7 @@ object CassandraConnectorConf extends Logging {
     val localConnections = conf.getOption(LocalConnectionsPerExecutorParam.name).map(_.toInt)
     val remoteConnections = conf.getOption(RemoteConnectionsPerExecutorParam.name).map(_.toInt)
     val queryRetryCount = conf.getInt(QueryRetryParam.name, QueryRetryParam.default)
+    val queryRetryMaxRetries = conf.getInt(QueryRetryMaxRetriesParam.name, QueryRetryMaxRetriesParam.default)
     val connectTimeout = conf.getInt(ConnectionTimeoutParam.name, ConnectionTimeoutParam.default)
     val readTimeout = conf.getInt(ReadTimeoutParam.name, ReadTimeoutParam.default)
     val quietPeriodBeforeClose = conf.getInt(QuietPeriodBeforeCloseParam.name, QuietPeriodBeforeCloseParam.default)
@@ -457,6 +468,7 @@ object CassandraConnectorConf extends Logging {
       remoteConnectionsPerExecutor = remoteConnections,
       compression = compression,
       queryRetryCount = queryRetryCount,
+      queryRetryMaxRetries = queryRetryMaxRetries,
       connectTimeoutMillis = connectTimeout,
       readTimeoutMillis = readTimeout,
       connectionFactory = connectionFactory,
