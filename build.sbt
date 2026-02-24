@@ -22,10 +22,13 @@ ThisBuild / pomExtra := Publishing.OurDevelopers
 ThisBuild / pomIncludeRepository := { _ => false }
 ThisBuild / scmInfo := Publishing.OurScmInfo
 
-Global / resolvers ++= Seq(
-  DefaultMavenRepository,
-  Resolver.sonatypeRepo("public")
-)
+// Publishing to Sonatype Central Portal (sbt 1.11+)
+ThisBuild / publishTo := {
+  val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
+  if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
+  else localStaging.value
+}
+ThisBuild / publishMavenStyle := true
 
 lazy val IntegrationTest = config("it") extend Test
 

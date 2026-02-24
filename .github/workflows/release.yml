@@ -45,15 +45,15 @@ jobs:
           distribution: 'temurin'
           cache: sbt
 
-      - name: Configure Git user
-        run: |
-          git config user.name "ScyllaDB Promoter"
-          git config user.email "github-promoter@scylladb.com"
-
       - name: Import GPG key
         env:
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
         run: echo "$PGP_SECRET" | base64 --decode | gpg --import --no-tty --batch --yes
+
+      - name: Configure Git user
+        run: |
+          git config user.name "ScyllaDB Promoter"
+          git config user.email "github-promoter@scylladb.com"
 
       - name: Prepare release
         run: make release-prepare
@@ -63,8 +63,8 @@ jobs:
         env:
           RELEASE_SKIP_TESTS: ${{ inputs.skip-tests }}
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}
         run: make release
 
       - name: Perform release dry-run
@@ -72,8 +72,8 @@ jobs:
         env:
           RELEASE_SKIP_TESTS: ${{ inputs.skip-tests }}
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
-          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}
         run: make release-dry-run
 
       - name: Upload release logs
