@@ -76,7 +76,7 @@ abstract class CassandraBaseInJoinReader(
   protected val bsb = JoinHelper.getKeyBuilderStatementBuilder(session, rowWriter, preparedStatement, cqlQueryParts.whereClause)
   protected val rowMetadata = JoinHelper.getCassandraRowMetadata(session, preparedStatement, cqlQueryParts.selectedColumnRefs)
 
-  protected val queryExecutor = QueryExecutor(session, readConf.parallelismLevel, None, None)
+  protected val queryExecutor = QueryExecutor(session, readConf.parallelismLevel, None, None, connector.conf)
   protected val maybeRateLimit = JoinHelper.maybeRateLimit(readConf)
   protected val requestsPerSecondRateLimiter = JoinHelper.requestsPerSecondRateLimiter(readConf)
 

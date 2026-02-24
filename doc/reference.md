@@ -131,6 +131,13 @@ Setting this to -1 means unlimited retries
       </td>
 </tr>
 <tr>
+  <td><code>spark.cassandra.query.retry.maxRetries</code></td>
+  <td>10</td>
+  <td>Maximum number of retries for a failed query due to transient errors
+(NodeUnavailableException, BusyConnectionException, OverloadedException).
+Set to 0 to disable retries.</td>
+</tr>
+<tr>
   <td><code>spark.cassandra.read.timeoutMS</code></td>
   <td>120000</td>
   <td>Maximum period of time to wait for a read to return </td>
