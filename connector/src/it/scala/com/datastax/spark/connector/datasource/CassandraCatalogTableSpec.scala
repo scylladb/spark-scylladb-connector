@@ -91,7 +91,7 @@ class CassandraCatalogTableSpec extends CassandraCatalogSpecBase {
     normalizedActual should contain theSameElementsAs normalizedExpected
   }
 
-  it should "create a table with multiple partition keys and clustering keys" in notScylla("scylladb/spark-scylladb-connector#25: Clustering order on Scylla always reported as ASC") {
+  it should "create a table with multiple partition keys and clustering keys" in {
     createDefaultKs()
     spark.sql(
       s"""CREATE TABLE $defaultKs.$testTable (
@@ -278,7 +278,7 @@ class CassandraCatalogTableSpec extends CassandraCatalogSpecBase {
     afterDetailedTableInformationMap.get("Name") should be(Some("testTable"))
   }
 
-  it should "describe table properties" in notScylla("scylladb/spark-scylladb-connector#25: Clustering order on Scylla always reported as ASC") {
+  it should "describe table properties" in {
     createDefaultKs()
     spark.sql(
       s"""CREATE TABLE $defaultKs.$testTable (
