@@ -121,7 +121,22 @@ class TableWriter[T] private (
     val setClause = (setNonCounterColumnsClause ++ setCounterColumnsClause).mkString(", ")
     val whereClause = quotedColumnNames(primaryKey).map(c => s"$c = :$c").mkString(" AND ")
 
-    s"UPDATE ${quote(keyspaceName)}.${quote(tableName)} SET $setClause WHERE $whereClause"
+    // Counter updates don't support USING TIMESTAMP.
+    // For all other UPDATEs, assign per-statement timestamps to ensure that multiple
+    // mutations to the same list within a batch get distinct timestamps. Without this,
+    // Scylla drops all but one list mutation when they share the same timestamp.
+    // See: https://github.com/scylladb/spark-scylladb-connector/issues/26
+    val usingClause = if (isCounterUpdate) {
+      ""
+    } else {
+      writeConf.timestamp match {
+        case TimestampOption(PerRowWriteOptionValue(placeholder)) => s" USING TIMESTAMP :$placeholder"
+        case TimestampOption(StaticWriteOptionValue(value)) => s" USING TIMESTAMP $value"
+        case _ => s" USING TIMESTAMP :${TableWriter.AutoTimestampParam}"
+      }
+    }
+
+    s"UPDATE ${quote(keyspaceName)}.${quote(tableName)}${usingClause} SET $setClause WHERE $whereClause"
   }
 
   private val isCounterUpdate =
@@ -322,6 +337,9 @@ case class AsyncStatementWriter[T](
 }
 
 object TableWriter {
+
+  /** Name of the auto-generated timestamp bind parameter added to UPDATE statements. */
+  private[writer] val AutoTimestampParam = "autots"
 
   private def checkMissingColumns(table: TableDef, columnNames: Seq[String]): Unit = {
     val allColumnNames = table.columns.map(_.columnName)
