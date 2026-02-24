@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{AnalysisException, SparkSession, functions}
+import org.apache.spark.sql.{CassandraAnalysisException, SparkSession, functions}
 
 trait CassandraMetadataFunction extends UnaryExpression with Unevaluable {
   def confParam: String
@@ -89,9 +89,7 @@ object CassandraMetadataFunction {
 
   def cassandraTTLFunctionBuilder(args: Seq[Expression]): CassandraTTL = {
     if (args.length != 1) {
-      throw new AnalysisException(
-        errorClass = "INVALID_PARAMETER_VALUE.CASSANDRA_TTL",
-        messageParameters = Map("message" -> s"Unable to call Cassandra ttl with more than 1 argument, given $args"))
+      throw CassandraAnalysisException( s"Unable to call Cassandra ttl with more than 1 argument, given $args")
     }
     CassandraTTL(args.head)
   }
@@ -106,9 +104,7 @@ object CassandraMetadataFunction {
 
   def cassandraWriteTimeFunctionBuilder(args: Seq[Expression]): CassandraWriteTime = {
     if (args.length != 1) {
-      throw new AnalysisException(
-        errorClass = "INVALID_PARAMETER_VALUE.CASSANDRA_WRITETIME",
-        messageParameters = Map("message" -> s"Unable to call Cassandra writetime with more than 1 argument, given $args"))
+      throw CassandraAnalysisException( s"Unable to call Cassandra writetime with more than 1 argument, given $args")
     }
     CassandraWriteTime(args.head)
   }
@@ -134,16 +130,12 @@ object CassandraMetaDataRule extends Rule[LogicalPlan] {
     val (cassandraTable) = plan.collectFirst {
       case DataSourceV2Relation(table: CassandraTable, _, _, _, _)
         if table.tableDef.columnByName.contains(cassandraColumnName) => table }
-      .getOrElse(throw new AnalysisException(
-        errorClass = "INVALID_PARAMETER_VALUE.CASSANDRA_METADATA",
-        messageParameters = Map("message" -> s"Unable to find Cassandra Source Relation for TTL/Writetime for column $cassandraColumnName")))
+      .getOrElse(throw CassandraAnalysisException( s"Unable to find Cassandra Source Relation for TTL/Writetime for column $cassandraColumnName"))
 
     val columnDef = cassandraTable.tableDef.columnByName(cassandraColumnName)
 
     if (columnDef.isPrimaryKeyColumn)
-      throw new AnalysisException(
-        errorClass = "INVALID_PARAMETER_VALUE.CASSANDRA_METADATA",
-        messageParameters = Map("message" -> s"Unable to use ${metaDataExpression.cql} function on non-normal column ${columnDef.columnName}"))
+      throw CassandraAnalysisException( s"Unable to use ${metaDataExpression.cql} function on non-normal column ${columnDef.columnName}")
 
     //Used for CassandraRelation Leaves, giving them a reference to the underlying Metadata
     val (cassandraAttributeReference, cassandraField) = if (columnDef.isMultiCell) {
