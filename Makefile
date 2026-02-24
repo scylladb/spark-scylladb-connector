@@ -1,5 +1,6 @@
 SHELL := bash
 .ONESHELL:
+.SHELLFLAGS := -ec
 
 .PHONY: sbt clean compile test-unit test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
@@ -75,17 +76,16 @@ sbt:
 	fi
 
 .prepare-scylla-ccm:
-	@ccm --help 2>/dev/null 1>&2
-	if [[ $$? -lt 127 ]] \
-		&& grep SCYLLA ${CCM_CONFIG_DIR}/ccm-type 2>/dev/null 1>&2 \
-		&& grep ${CCM_SCYLLA_VERSION} ${CCM_CONFIG_DIR}/ccm-version 2>/dev/null 1>&2; then
+	@if ccm --help 2>/dev/null 1>&2 &&
+		grep SCYLLA ${CCM_CONFIG_DIR}/ccm-type 2>/dev/null 1>&2 &&
+		grep ${CCM_SCYLLA_VERSION} ${CCM_CONFIG_DIR}/ccm-version 2>/dev/null 1>&2; then
 		echo "ScyllaDB CCM ${CCM_SCYLLA_VERSION} is already installed"
-	else \
-	  	$(MAKE) install-scylla-ccm; \
+	else
+	  	$(MAKE) install-scylla-ccm
 	fi
 
 resolve-cassandra-version: .prepare-get-version
-	@find "${CASSANDRA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1
+	@find "${CASSANDRA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1 || true
 	if [[ -f "${CASSANDRA_VERSION_FILE}" ]]; then
 		echo "Resolved Cassandra ${CASSANDRA_VERSION} to $$(cat ${CASSANDRA_VERSION_FILE})"
 		exit 0
@@ -118,7 +118,7 @@ resolve-cassandra-version: .prepare-get-version
 	echo "$$CASSANDRA_VERSION_RESOLVED" >${CASSANDRA_VERSION_FILE}
 
 resolve-scylla-version: .prepare-get-version
-	@find "${SCYLLA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1
+	@find "${SCYLLA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1 || true
 	if [[ -f "${SCYLLA_VERSION_FILE}" ]]; then
 		echo "Resolved ScyllaDB ${SCYLLA_VERSION} to $$(cat ${SCYLLA_VERSION_FILE})"
 		exit 0
@@ -156,10 +156,9 @@ resolve-scylla-version: .prepare-get-version
 		echo "Retry $$i: pip install psutil failed, retrying..."
 		sleep 2
 	done
-	ccm --help 2>/dev/null 1>&2
-	if [[ $$? -lt 127 ]] \
-		&& grep CASSANDRA "${CCM_CONFIG_DIR}/ccm-type" 2>/dev/null 1>&2 \
-		&& grep "${CCM_CASSANDRA_VERSION}" "${CCM_CONFIG_DIR}/ccm-version" 2>/dev/null 1>&2; then
+	if ccm --help 2>/dev/null 1>&2 &&
+		grep CASSANDRA "${CCM_CONFIG_DIR}/ccm-type" 2>/dev/null 1>&2 &&
+		grep "${CCM_CASSANDRA_VERSION}" "${CCM_CONFIG_DIR}/ccm-version" 2>/dev/null 1>&2; then
 		echo "Cassandra CCM ${CCM_CASSANDRA_VERSION} is already installed"
 	else
 		$(MAKE) install-cassandra-ccm
@@ -188,7 +187,7 @@ install-scylla-ccm:
 	echo ${CCM_SCYLLA_VERSION} > ${CCM_CONFIG_DIR}/ccm-version
 
 resolve-scala-version: .prepare-get-version
-	@find "${SCALA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1
+	@find "${SCALA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1 || true
 	if [[ -f "${SCALA_VERSION_FILE}" ]]; then
 		echo "Resolved Scala ${SCALA_VERSION} to $$(cat ${SCALA_VERSION_FILE})"
 		exit 0
@@ -342,9 +341,7 @@ release: .require-release-env
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
 		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
 	fi
-	eval $(SBT_BIN) $$SBT_CMDS \
-		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
-		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+	eval $(SBT_BIN) $$SBT_CMDS > >(tee $(RELEASE_LOG_DIR)/stdout.log) 2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
 
 release-dry-run: .require-release-env
 	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
@@ -355,9 +352,7 @@ release-dry-run: .require-release-env
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
 		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
 	fi
-	eval $(SBT_BIN) $$SBT_CMDS \
-		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
-		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+	eval $(SBT_BIN) $$SBT_CMDS > >(tee $(RELEASE_LOG_DIR)/stdout.log) 2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
 
 checkout-one-commit-before:
 	@if [[ "${RELEASE_TARGET_TAG}" == v* ]]; then
