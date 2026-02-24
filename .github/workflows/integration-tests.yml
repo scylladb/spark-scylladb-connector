@@ -96,7 +96,7 @@ jobs:
       CASSANDRA_VERSION: ${{ matrix.db-type == 'cassandra' && matrix.db-version || '' }}
       SCYLLA_VERSION: ${{ matrix.db-type == 'scylla' && matrix.db-version || '' }}
       SCALA_VERSION: ${{ matrix.scala }}
-      TEST_PARALLEL_TASKS: 1
+      TEST_PARALLEL_TASKS: 2
       PUBLISH_VERSION: test
 
     steps:
