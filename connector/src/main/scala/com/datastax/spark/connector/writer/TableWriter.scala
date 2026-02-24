@@ -305,7 +305,9 @@ case class AsyncStatementWriter[T](
   private val keyspaceName: String = tableDef.keyspaceName
   private val tableName: String = tableDef.tableName
 
-  private lazy val queryExecutor = new QueryExecutor(session, writeConf.parallelismLevel, successHandler, failureHandler)
+  private lazy val queryExecutor = new QueryExecutor(
+    session, writeConf.parallelismLevel, successHandler, failureHandler,
+    maxRetries = connector.conf.queryRetryMaxRetries)
 
   def write(record: T): Unit= {
     groupingBatchBuilderBase.batchRecord(record).foreach{ stmt =>
