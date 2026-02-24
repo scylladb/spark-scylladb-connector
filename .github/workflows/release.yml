@@ -86,5 +86,6 @@ jobs:
       - name: Push changes to SCM
         if: ${{ inputs.dry-run == false && inputs.target-tag == 'scylla-4.x' }}
         run: |
+          git checkout scylla-4.x
           git status && git log -3
           git push origin --follow-tags -v
