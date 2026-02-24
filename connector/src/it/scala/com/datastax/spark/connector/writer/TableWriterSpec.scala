@@ -789,7 +789,7 @@ class TableWriterSpec extends SparkCassandraITFlatSpecBase with DefaultCluster {
     verifyKeyValueTable("key_value")
   }
 
-  it should "be able to append and prepend elements to a C* list" in notScylla("scylladb/spark-scylladb-connector#26: List prepend loses elements when batched") {
+  it should "be able to append and prepend elements to a C* list" in {
 
     val listElements = sc.parallelize(Seq(
       (1, Vector("One")),
