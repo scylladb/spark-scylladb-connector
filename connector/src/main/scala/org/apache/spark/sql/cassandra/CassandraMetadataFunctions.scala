@@ -123,9 +123,10 @@ object CassandraMetaDataRule extends Rule[LogicalPlan] {
 
   def replaceMetadata(metaDataExpression: CassandraMetadataFunction, plan: LogicalPlan)
   : LogicalPlan = {
-    assert(metaDataExpression.child.isInstanceOf[AttributeReference],
-      s"""Can only use Cassandra Metadata Functions on Attribute References,
-         |found a ${metaDataExpression.child.getClass}""".stripMargin)
+    if (!metaDataExpression.child.isInstanceOf[AttributeReference]) {
+      // Child not yet resolved, return plan unchanged to allow re-application after resolution
+      return plan
+    }
 
     val cassandraColumnName = metaDataExpression.child.asInstanceOf[AttributeReference].name
     val cassandraCql = s"${metaDataExpression.cql}($cassandraColumnName)"
@@ -133,8 +134,9 @@ object CassandraMetaDataRule extends Rule[LogicalPlan] {
     val (cassandraTable) = plan.collectFirst {
       case DataSourceV2Relation(table: CassandraTable, _, _, _, _)
         if table.tableDef.columnByName.contains(cassandraColumnName) => table }
-      .getOrElse(throw new IllegalArgumentException(
-        s"Unable to find Cassandra Source Relation for TTL/Writetime for column $cassandraColumnName"))
+      .getOrElse(throw new AnalysisException(
+        errorClass = "INVALID_PARAMETER_VALUE.CASSANDRA_METADATA",
+        messageParameters = Map("message" -> s"Unable to find Cassandra Source Relation for TTL/Writetime for column $cassandraColumnName")))
 
     val columnDef = cassandraTable.tableDef.columnByName(cassandraColumnName)
 
