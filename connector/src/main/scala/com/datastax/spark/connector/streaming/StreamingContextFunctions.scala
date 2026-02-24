@@ -28,6 +28,7 @@ import com.datastax.spark.connector.rdd.reader.RowReaderFactory
 /** Provides Cassandra-specific methods on `org.apache.spark.streaming.StreamingContext`.
   * @param ssc the Spark Streaming context
   */
+@scala.annotation.nowarn("cat=deprecation")
 class StreamingContextFunctions (ssc: StreamingContext) extends SparkContextFunctions(ssc.sparkContext) {
   import scala.reflect.ClassTag
 

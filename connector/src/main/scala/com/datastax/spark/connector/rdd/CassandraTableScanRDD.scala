@@ -298,7 +298,7 @@ class CassandraTableScanRDD[R] private[connector](
   }
 
   override def getPreferredLocations(split: Partition): Seq[String] =
-    split.asInstanceOf[CassandraPartition[_, _]].endpoints
+    split.asInstanceOf[CassandraPartition[_, _]].endpoints.toIndexedSeq
 
   override def compute(split: Partition, context: TaskContext): Iterator[R] = {
     val partition = split.asInstanceOf[CassandraPartition[TokenFactory.V, TokenFactory.T]]

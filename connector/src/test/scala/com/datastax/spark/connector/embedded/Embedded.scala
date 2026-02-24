@@ -32,7 +32,6 @@ private[embedded] trait EmbeddedIO {
   import scala.io.Source
   import scala.language.reflectiveCalls
   import scala.util.Try
-  import com.google.common.io.Files
   import org.apache.commons.lang3.SystemUtils
 
   val shutdownDeletePaths = new scala.collection.mutable.HashSet[String]()
@@ -57,7 +56,8 @@ private[embedded] trait EmbeddedIO {
   }
 
   def createTempDir: File = {
-    val dir = mkdir(new File(Files.createTempDir(), "spark-tmp-" + UUID.randomUUID.toString))
+    val tmpDir = java.nio.file.Files.createTempDirectory("spark").toFile
+    val dir = mkdir(new File(tmpDir, "spark-tmp-" + UUID.randomUUID.toString))
     registerShutdownDeleteDir(dir)
 
     Runtime.getRuntime.addShutdownHook(new Thread("delete Spark temp dir " + dir) {
@@ -131,7 +131,7 @@ private[embedded] trait EmbeddedIO {
   def listFilesSafely(file: File): Seq[File] = {
     val files = file.listFiles()
     if (files == null) throw new IOException("Failed to list files for dir: " + file)
-    files
+    files.toIndexedSeq
   }
 }
 

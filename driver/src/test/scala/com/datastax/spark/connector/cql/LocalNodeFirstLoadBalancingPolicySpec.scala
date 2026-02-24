@@ -22,6 +22,7 @@ import java.net.InetSocketAddress
 import java.util.function.Predicate
 import java.util.{Optional, UUID}
 
+import scala.annotation.nowarn
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption.{LOAD_BALANCING_FILTER_CLASS, LOAD_BALANCING_LOCAL_DATACENTER}
 import com.datastax.oss.driver.api.core.config.{DriverConfig, DriverExecutionProfile}
 import com.datastax.oss.driver.api.core.context.DriverContext
@@ -115,8 +116,8 @@ class LocalNodeFirstLoadBalancingPolicySpec extends FlatSpec with Matchers with 
   }
 
   it should "apply configured node filter" in {
-    when(profile.isDefined(m.eq(LOAD_BALANCING_FILTER_CLASS))).thenReturn(true)
-    when(profile.getString(m.eq(LOAD_BALANCING_FILTER_CLASS))).thenReturn(classOf[NodeFilter].getCanonicalName)
+    @nowarn("cat=deprecation") val _1: Unit = when(profile.isDefined(m.eq(LOAD_BALANCING_FILTER_CLASS))).thenReturn(true)
+    @nowarn("cat=deprecation") val _2: Unit = when(profile.getString(m.eq(LOAD_BALANCING_FILTER_CLASS))).thenReturn(classOf[NodeFilter].getCanonicalName)
 
     val policy = new LocalNodeFirstLoadBalancingPolicy(context, profileName)
     val reporter = mock[LoadBalancingPolicy.DistanceReporter]

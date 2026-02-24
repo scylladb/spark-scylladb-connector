@@ -79,7 +79,7 @@ package object connector {
   implicit def toRDDFunctions[T](rdd: RDD[T]): RDDFunctions[T] =
     new RDDFunctions(rdd)
 
-  implicit def toCassandraTableScanFunctions[T](rdd: CassandraTableScanRDD[T]) =
+  implicit def toCassandraTableScanFunctions[T](rdd: CassandraTableScanRDD[T]): CassandraTableScanRDDFunctions[T] =
     new CassandraTableScanRDDFunctions(rdd)
 
   implicit def toDataFrameFunctions(dataFrame: DataFrame): DatasetFunctions[Row] =

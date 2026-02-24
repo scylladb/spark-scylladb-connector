@@ -26,7 +26,8 @@ import org.apache.commons.exec.{CommandLine, ExecuteWatchdog, LogOutputStream, _
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.mutable
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
+import scala.language.reflectiveCalls
 import scala.util.Try
 
 class CcmBridge(config: CcmConfig) extends AutoCloseable {

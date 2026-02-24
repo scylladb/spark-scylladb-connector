@@ -41,12 +41,12 @@ class CassandraSink(val properties: Properties, val registry: MetricRegistry)
   @volatile private var connector: Option[CassandraConnector] = None
   @volatile private var writer: Option[CassandraSink.Writer] = None
 
-  override def start: Unit = {
+  override def start(): Unit = {
     logInfo("CassandraSink started")
     executor.scheduleAtFixedRate(this, refreshRate, refreshRate, TimeUnit.SECONDS)
   }
 
-  override def stop: Unit = {
+  override def stop(): Unit = {
     logInfo("CassandraSink finished")
     executor.shutdown()
   }

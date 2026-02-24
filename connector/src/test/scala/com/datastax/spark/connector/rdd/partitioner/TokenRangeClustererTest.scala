@@ -26,6 +26,8 @@ import com.datastax.spark.connector.rdd.partitioner.dht.{LongToken, TokenRange}
 import org.junit.Assert._
 import org.junit.Test
 
+import scala.language.implicitConversions
+
 class TokenRangeClustererTest {
 
   val node1 = InetAddress.getByName("192.168.123.1")

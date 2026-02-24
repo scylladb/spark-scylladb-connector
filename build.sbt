@@ -8,7 +8,7 @@ lazy val supportedScalaVersions = List(scala213)
 
 // factor out common settings
 ThisBuild / scalaVersion := scala213
-ThisBuild / scalacOptions ++= Seq("-release:17")
+ThisBuild / scalacOptions ++= Seq("-release:17", "-Werror")
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 

@@ -46,6 +46,7 @@ trait Assertions {
     case x if x eq Duration.Undefined => duration
     case x if !x.isFinite             => throw new IllegalArgumentException("`end` cannot be infinite")
     case f: FiniteDuration            => f - now
+    case _                            => throw new IllegalStateException("Unexpected duration state")
   }
 
   /**
@@ -74,5 +75,6 @@ trait Assertions {
     case x if x eq Duration.Undefined => remainingOrDefault
     case x if !x.isFinite             => throw new IllegalArgumentException("max duration cannot be infinite")
     case f: FiniteDuration            => f.dilated
+    case _                            => throw new IllegalStateException("Unexpected duration state")
   }
 }
