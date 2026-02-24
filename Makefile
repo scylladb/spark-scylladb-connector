@@ -76,9 +76,9 @@ sbt:
 	fi
 
 .prepare-scylla-ccm:
-	@if ccm --help 2>/dev/null 1>&2 \
-		&& grep SCYLLA ${CCM_CONFIG_DIR}/ccm-type 2>/dev/null 1>&2 \
-		&& grep ${CCM_SCYLLA_VERSION} ${CCM_CONFIG_DIR}/ccm-version 2>/dev/null 1>&2; then
+	@if ccm --help 2>/dev/null 1>&2 &&
+		grep SCYLLA ${CCM_CONFIG_DIR}/ccm-type 2>/dev/null 1>&2 &&
+		grep ${CCM_SCYLLA_VERSION} ${CCM_CONFIG_DIR}/ccm-version 2>/dev/null 1>&2; then
 		echo "ScyllaDB CCM ${CCM_SCYLLA_VERSION} is already installed"
 	else
 	  	$(MAKE) install-scylla-ccm
@@ -156,9 +156,9 @@ resolve-scylla-version: .prepare-get-version
 		echo "Retry $$i: pip install psutil failed, retrying..."
 		sleep 2
 	done
-	if ccm --help 2>/dev/null 1>&2 \
-		&& grep CASSANDRA "${CCM_CONFIG_DIR}/ccm-type" 2>/dev/null 1>&2 \
-		&& grep "${CCM_CASSANDRA_VERSION}" "${CCM_CONFIG_DIR}/ccm-version" 2>/dev/null 1>&2; then
+	if ccm --help 2>/dev/null 1>&2 &&
+		grep CASSANDRA "${CCM_CONFIG_DIR}/ccm-type" 2>/dev/null 1>&2 &&
+		grep "${CCM_CASSANDRA_VERSION}" "${CCM_CONFIG_DIR}/ccm-version" 2>/dev/null 1>&2; then
 		echo "Cassandra CCM ${CCM_CASSANDRA_VERSION} is already installed"
 	else
 		$(MAKE) install-cassandra-ccm
@@ -341,9 +341,7 @@ release: .require-release-env
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
 		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
 	fi
-	eval $(SBT_BIN) $$SBT_CMDS \
-		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
-		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+	eval $(SBT_BIN) $$SBT_CMDS > >(tee $(RELEASE_LOG_DIR)/stdout.log) 2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
 
 release-dry-run: .require-release-env
 	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
@@ -354,9 +352,7 @@ release-dry-run: .require-release-env
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
 		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
 	fi
-	eval $(SBT_BIN) $$SBT_CMDS \
-		> >(tee $(RELEASE_LOG_DIR)/stdout.log) \
-		2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+	eval $(SBT_BIN) $$SBT_CMDS > >(tee $(RELEASE_LOG_DIR)/stdout.log) 2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
 
 checkout-one-commit-before:
 	@if [[ "${RELEASE_TARGET_TAG}" == v* ]]; then
