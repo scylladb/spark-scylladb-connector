@@ -37,8 +37,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: "Lint"
+  compile:
+    name: "Compile"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -68,6 +68,57 @@ jobs:
           restore-keys: |
             maven-${{ runner.os }}-
 
+      - name: Compile all modules
+        run: SCALA_VERSION=${{ inputs.scala-versions || '2-LATEST' }} make compile
+
+      - name: Cache compiled classes
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            **/target/scala-*
+            **/target/streams
+          key: compiled-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
+
+  lint:
+    name: "Lint"
+    needs: compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Restore SBT cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.sbt
+            ~/.ivy2/cache
+            ~/.cache/coursier
+          key: sbt-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
+          restore-keys: |
+            sbt-${{ runner.os }}-
+
+      - name: Restore Maven cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
+
+      - name: Restore compiled classes
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            **/target/scala-*
+            **/target/streams
+          key: compiled-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
+
       - name: Run scalastyle
         run: make lint
 
@@ -85,7 +136,7 @@ jobs:
 
   test:
     name: "${{ matrix.db-type }} ${{ matrix.db-version }} / scala ${{ matrix.scala }}"
-    needs: prepare
+    needs: [compile, prepare]
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:
@@ -149,6 +200,14 @@ jobs:
           key: maven-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
           restore-keys: |
             maven-${{ runner.os }}-
+
+      - name: Restore compiled classes
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            **/target/scala-*
+            **/target/streams
+          key: compiled-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
 
       - name: Resolve database version
         id: db-version

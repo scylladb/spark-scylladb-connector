@@ -1,7 +1,7 @@
 SHELL := bash
 .ONESHELL:
 
-.PHONY: sbt clean test-unit test-integration-cassandra test-integration-scylla \
+.PHONY: sbt clean compile test-unit test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
         download-cassandra download-scylla install-cassandra-ccm install-scylla-ccm \
         generate-test-matrix lint lint-fix generate-test-certs \
@@ -276,6 +276,9 @@ test-integration-scylla: resolve-scala-version resolve-scylla-version generate-t
 		SCYLLA_VERSION_RESOLVED="release:$$SCYLLA_VERSION_RESOLVED"
 	fi
 	JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" CCM_CASSANDRA_VERSION="$$SCYLLA_VERSION_RESOLVED" CCM_IS_SCYLLA=true $(SBT_CMD) test it:test
+
+compile: resolve-scala-version
+	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) compile Test/compile IntegrationTest/compile
 
 test-unit: resolve-scala-version
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) test
