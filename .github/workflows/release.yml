@@ -1,4 +1,4 @@
-name: Release Spark ScyllaDB Connector
+name: Release
 
 on:
   workflow_dispatch:
