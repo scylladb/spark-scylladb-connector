@@ -161,6 +161,10 @@ jobs:
       - name: Install CCM
         run: make install-${{ matrix.db-type }}-ccm
 
+      - name: Get CCM version
+        id: ccm-version
+        run: echo "value=$(ccm --version 2>&1 | head -1 || echo 'unknown')" >> $GITHUB_OUTPUT
+
       - name: Setup Java
         uses: actions/setup-java@v5
         with:
@@ -226,7 +230,7 @@ jobs:
         id: ccm-cache
         with:
           path: ~/.ccm/${{ matrix.db-type == 'scylla' && 'scylla-repository' || 'repository' }}
-          key: ccm-${{ runner.os }}-${{ steps.db-version.outputs.value }}
+          key: ccm-${{ runner.os }}-${{ steps.ccm-version.outputs.value }}-${{ steps.db-version.outputs.value }}
 
       - name: Pre-download database image
         if: steps.ccm-cache.outputs.cache-hit != 'true'
@@ -237,7 +241,7 @@ jobs:
         if: steps.ccm-cache.outputs.cache-hit != 'true'
         with:
           path: ~/.ccm/${{ matrix.db-type == 'scylla' && 'scylla-repository' || 'repository' }}
-          key: ccm-${{ runner.os }}-${{ steps.db-version.outputs.value }}
+          key: ccm-${{ runner.os }}-${{ steps.ccm-version.outputs.value }}-${{ steps.db-version.outputs.value }}
 
       - name: Run tests
         run: |
