@@ -2,7 +2,7 @@ SHELL := bash
 .ONESHELL:
 .SHELLFLAGS := -ec
 
-.PHONY: help sbt clean compile test-unit test-integration-cassandra test-integration-scylla \
+.PHONY: help sbt clean compile test-unit test-coverage test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
         download-cassandra download-scylla install-cassandra-ccm install-scylla-ccm \
         generate-test-matrix lint lint-fix generate-test-certs \
@@ -283,6 +283,9 @@ test-integration-scylla: resolve-scala-version resolve-scylla-version generate-t
 
 compile: resolve-scala-version ## Compile all modules
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) compile Test/compile IntegrationTest/compile
+
+test-coverage: resolve-scala-version ## Run unit tests with coverage
+	@COVERAGE=true JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) coverage test coverageReport
 
 test-unit: resolve-scala-version ## Run unit tests
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) test

@@ -11,6 +11,9 @@ ThisBuild / scalaVersion := scala213
 ThisBuild / scalacOptions ++= Seq("-release:17")
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
+ThisBuild / coverageEnabled := sys.env.getOrElse("COVERAGE", "false").toBoolean
+// Allow scoverage's scala-library to be newer than scalaVersion (SIP-51 check)
+ThisBuild / allowUnsafeScalaLibUpgrade := (ThisBuild / coverageEnabled).value
 
 // Publishing Info
 ThisBuild / homepage := Some(url("https://github.com/scylladb/spark-scylladb-connector"))
