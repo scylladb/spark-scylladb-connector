@@ -2,7 +2,7 @@ SHELL := bash
 .ONESHELL:
 .SHELLFLAGS := -ec
 
-.PHONY: sbt clean compile test-unit test-integration-cassandra test-integration-scylla \
+.PHONY: help sbt clean compile test-unit test-integration-cassandra test-integration-scylla \
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
         download-cassandra download-scylla install-cassandra-ccm install-scylla-ccm \
         generate-test-matrix lint lint-fix generate-test-certs \
@@ -55,7 +55,12 @@ SCALA_VERSION_FILE=/tmp/scala-version-$(SCALA_VERSION).resolved
 
 SBT_CMD=$(SBT_BIN) ++$${SCALA_VERSION_RESOLVED:-$$(cat "$(SCALA_VERSION_FILE)")}
 
-sbt:
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
+.DEFAULT_GOAL := help
+
+sbt: ## Ensure SBT is installed
 	@$(MAKE) sbt-install
 
 .prepare-bin:
@@ -84,7 +89,7 @@ sbt:
 	  	$(MAKE) install-scylla-ccm
 	fi
 
-resolve-cassandra-version: .prepare-get-version
+resolve-cassandra-version: .prepare-get-version ## Resolve Cassandra version string
 	@find "${CASSANDRA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1 || true
 	if [[ -f "${CASSANDRA_VERSION_FILE}" ]]; then
 		echo "Resolved Cassandra ${CASSANDRA_VERSION} to $$(cat ${CASSANDRA_VERSION_FILE})"
@@ -117,7 +122,7 @@ resolve-cassandra-version: .prepare-get-version
 	fi
 	echo "$$CASSANDRA_VERSION_RESOLVED" >${CASSANDRA_VERSION_FILE}
 
-resolve-scylla-version: .prepare-get-version
+resolve-scylla-version: .prepare-get-version ## Resolve ScyllaDB version string
 	@find "${SCYLLA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1 || true
 	if [[ -f "${SCYLLA_VERSION_FILE}" ]]; then
 		echo "Resolved ScyllaDB ${SCYLLA_VERSION} to $$(cat ${SCYLLA_VERSION_FILE})"
@@ -164,7 +169,7 @@ resolve-scylla-version: .prepare-get-version
 		$(MAKE) install-cassandra-ccm
 	fi
 
-install-cassandra-ccm:
+install-cassandra-ccm: ## Install Cassandra CCM
 	@echo "Installing Cassandra CCM ${CCM_CASSANDRA_VERSION} from ${CCM_CASSANDRA_REPO}"
 	for i in 1 2 3; do
 		pip install "git+https://${CCM_CASSANDRA_REPO}.git@${CCM_CASSANDRA_VERSION}" && break
@@ -175,7 +180,7 @@ install-cassandra-ccm:
 	echo CASSANDRA > ${CCM_CONFIG_DIR}/ccm-type
 	echo ${CCM_CASSANDRA_VERSION} > ${CCM_CONFIG_DIR}/ccm-version
 
-install-scylla-ccm:
+install-scylla-ccm: ## Install ScyllaDB CCM
 	@echo "Installing ScyllaDB CCM ${CCM_SCYLLA_VERSION} from ${CCM_SCYLLA_REPO}"
 	for i in 1 2 3; do
 		pip install "git+https://${CCM_SCYLLA_REPO}.git@${CCM_SCYLLA_VERSION}" && break
@@ -186,7 +191,7 @@ install-scylla-ccm:
 	echo SCYLLA > ${CCM_CONFIG_DIR}/ccm-type
 	echo ${CCM_SCYLLA_VERSION} > ${CCM_CONFIG_DIR}/ccm-version
 
-resolve-scala-version: .prepare-get-version
+resolve-scala-version: .prepare-get-version ## Resolve Scala version string
 	@find "${SCALA_VERSION_FILE}" -mtime +0 -delete 2>/dev/null 1>&1 || true
 	if [[ -f "${SCALA_VERSION_FILE}" ]]; then
 		echo "Resolved Scala ${SCALA_VERSION} to $$(cat ${SCALA_VERSION_FILE})"
@@ -222,7 +227,7 @@ resolve-scala-version: .prepare-get-version
 DATABASES ?= scylla:LATEST,scylla:LTS-LATEST,cassandra:3-LATEST,cassandra:4-LATEST,cassandra:5-LATEST
 SCALA_VERSIONS ?= 2-LATEST
 
-generate-test-matrix:
+generate-test-matrix: ## Generate CI test matrix JSON
 	@IFS=',' read -ra scala_arr <<< "$(SCALA_VERSIONS)"
 	scala_count=$${#scala_arr[@]}
 	matrix='{"include":['
@@ -248,14 +253,14 @@ generate-test-matrix:
 		echo "matrix=$$matrix" >>$${GITHUB_OUTPUT}
 	fi
 
-download-cassandra: .prepare-cassandra-ccm resolve-cassandra-version
+download-cassandra: .prepare-cassandra-ccm resolve-cassandra-version ## Pre-download Cassandra via CCM
 	@CASSANDRA_VERSION_RESOLVED=$${CASSANDRA_VERSION_RESOLVED:-$$(cat "${CASSANDRA_VERSION_FILE}")}
 	rm -rf /tmp/download.ccm || true
 	mkdir -p /tmp/download.ccm
 	ccm create ccm_1 -i 127.0.254. -n 1:0 -v "$$CASSANDRA_VERSION_RESOLVED" --config-dir=/tmp/download.ccm
 	rm -rf /tmp/download.ccm
 
-download-scylla: .prepare-scylla-ccm resolve-scylla-version
+download-scylla: .prepare-scylla-ccm resolve-scylla-version ## Pre-download ScyllaDB via CCM
 	@SCYLLA_VERSION_RESOLVED=$${SCYLLA_VERSION_RESOLVED:-$$(cat "${SCYLLA_VERSION_FILE}")}
 	if [[ "$$SCYLLA_VERSION_RESOLVED" =~ ^[0-9]{4}\. ]]; then
 		SCYLLA_VERSION_RESOLVED="release:$$SCYLLA_VERSION_RESOLVED"
@@ -265,35 +270,35 @@ download-scylla: .prepare-scylla-ccm resolve-scylla-version
 	ccm create ccm_1 -i 127.0.254. -n 1:0 -v "$$SCYLLA_VERSION_RESOLVED" --scylla --config-dir=/tmp/download.ccm
 	rm -rf /tmp/download.ccm
 
-test-integration-cassandra: resolve-scala-version resolve-cassandra-version generate-test-certs
+test-integration-cassandra: resolve-scala-version resolve-cassandra-version generate-test-certs ## Run integration tests against Cassandra
 	@CASSANDRA_VERSION_RESOLVED=$${CASSANDRA_VERSION_RESOLVED:-$$(cat "${CASSANDRA_VERSION_FILE}")}
 	JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" CCM_CASSANDRA_VERSION="$$CASSANDRA_VERSION_RESOLVED" $(SBT_CMD) test it:test
 
-test-integration-scylla: resolve-scala-version resolve-scylla-version generate-test-certs
+test-integration-scylla: resolve-scala-version resolve-scylla-version generate-test-certs ## Run integration tests against ScyllaDB
 	@SCYLLA_VERSION_RESOLVED=$${SCYLLA_VERSION_RESOLVED:-$$(cat "${SCYLLA_VERSION_FILE}")}
 	if [[ "$$SCYLLA_VERSION_RESOLVED" =~ ^[0-9]{4}\. ]]; then
 		SCYLLA_VERSION_RESOLVED="release:$$SCYLLA_VERSION_RESOLVED"
 	fi
 	JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" CCM_CASSANDRA_VERSION="$$SCYLLA_VERSION_RESOLVED" CCM_IS_SCYLLA=true $(SBT_CMD) test it:test
 
-compile: resolve-scala-version
+compile: resolve-scala-version ## Compile all modules
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) compile Test/compile IntegrationTest/compile
 
-test-unit: resolve-scala-version
+test-unit: resolve-scala-version ## Run unit tests
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) test
 
-lint: resolve-scala-version
+lint: resolve-scala-version ## Check code with scalafix
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) "scalafix --check" "Test/scalafix --check" "IntegrationTest/scalafix --check"
 
-lint-fix: resolve-scala-version
+lint-fix: resolve-scala-version ## Auto-fix scalafix issues
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) scalafix Test/scalafix IntegrationTest/scalafix
 
 TLS_CERT_DIR := $(MAKEFILE_PATH)/test-support/src/main/resources/tls
 
-generate-test-certs:
+generate-test-certs: ## Generate TLS test certificates
 	@$(MAKEFILE_PATH)/scripts/generate-test-certs.sh "$(TLS_CERT_DIR)"
 
-clean:
+clean: ## Clean build artifacts and TLS certs
 	@$(SBT_BIN) clean
 	@rm -rf "$(TLS_CERT_DIR)"
 
@@ -312,7 +317,7 @@ RELEASE_LOG_DIR := /tmp/spark-connector-release-logs
 		exit 1
 	fi
 
-release-prepare:
+release-prepare: ## Prepare release (version bump + tag)
 	@CURRENT_VERSION=$$(grep -oP '(?<=:= ")[^"]+' version.sbt)
 	if [[ ! "$$CURRENT_VERSION" =~ -SNAPSHOT$$ ]]; then
 		echo "Current version $$CURRENT_VERSION is not a SNAPSHOT version"
@@ -332,7 +337,7 @@ release-prepare:
 	git commit -m "[release] prepare for next development iteration"
 	echo "Release $$RELEASE_VERSION prepared. Next development version: $$NEXT_VERSION"
 
-release: .require-release-env
+release: .require-release-env ## Publish release to Maven Central
 	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
 	echo "Performing release for tag $$RELEASE_TAG"
 	git checkout "$$RELEASE_TAG"
@@ -343,7 +348,7 @@ release: .require-release-env
 	fi
 	eval $(SBT_BIN) $$SBT_CMDS > >(tee $(RELEASE_LOG_DIR)/stdout.log) 2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
 
-release-dry-run: .require-release-env
+release-dry-run: .require-release-env ## Dry-run release (no Maven Central publish)
 	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
 	echo "Performing dry-run release for tag $$RELEASE_TAG"
 	git checkout "$$RELEASE_TAG"
