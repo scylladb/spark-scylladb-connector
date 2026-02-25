@@ -2,7 +2,7 @@
 
 *Lightning-fast cluster computing with Apache Spark&trade; and Apache Cassandra&reg;.*
 
-[![CI](https://github.com/apache/cassandra-spark-connector/actions/workflows/main.yml/badge.svg?branch=trunk)](https://github.com/apache/cassandra-spark-connector/actions?query=branch%3Atrunk)
+[![Integration Tests](https://github.com/scylladb/spark-scylladb-connector/actions/workflows/integration-tests.yml/badge.svg?branch=scylla-4.x)](https://github.com/scylladb/spark-scylladb-connector/actions/workflows/integration-tests.yml?query=branch%3Ascylla-4.x)
 
 This is a fork from [datastax/spark-cassandra-connector](https://github.com/datastax/spark-cassandra-connector) including features specific to [ScyllaDB](https://scylladb.com) and to the needs of the [ScyllaDB Migrator](https://migrator.docs.scylladb.com).
 
