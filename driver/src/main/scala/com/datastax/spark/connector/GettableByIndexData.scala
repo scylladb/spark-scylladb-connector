@@ -39,7 +39,7 @@ trait GettableByIndexData extends Serializable {
   /** Returns true if column value is Cassandra null */
   def isNullAt(index: Int): Boolean =
     columnValues(index) == null
-  
+
   /** Displays the content in human readable form, including the names and values of the columns */
   def dataAsString: String =
     columnValues

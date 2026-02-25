@@ -62,7 +62,7 @@ import scala.language.implicitConversions
  *
  *   // Read the table and print its contents:
  *   val rdd = sc.cassandraTable(keyspace, table)
- *   rdd.toArray().foreach(println)
+ *   rdd.toArray().foreach(row => System.out.print(row + "\n"))
  *
  *   // Write two rows to the table:
  *   val col = sc.parallelize(Seq(("of", 1200), ("the", "863")))

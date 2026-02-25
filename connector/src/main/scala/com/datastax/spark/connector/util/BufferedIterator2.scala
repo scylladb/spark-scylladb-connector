@@ -20,7 +20,7 @@ package com.datastax.spark.connector.util
 
 import scala.collection.mutable.ArrayBuffer
 
-/** Serves the same purpose as `BufferedIterator` in Scala, but its `takeWhile` method 
+/** Serves the same purpose as `BufferedIterator` in Scala, but its `takeWhile` method
   * properly doesn't consume the next element. */
 class BufferedIterator2[T](iterator: Iterator[T]) extends Iterator[T] {
 

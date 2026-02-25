@@ -27,7 +27,7 @@ import scala.jdk.CollectionConverters._
 
 
 /** Estimates amount of data in the Cassandra table.
-  * Takes token range size estimates from the `system.size_estimates` table, 
+  * Takes token range size estimates from the `system.size_estimates` table,
   * available since Cassandra 2.1.5. */
 class DataSizeEstimates[V, T <: Token[V]](
     conn: CassandraConnector,
@@ -46,8 +46,8 @@ class DataSizeEstimates[V, T <: Token[V]](
 
     def ringFraction: Double =
       tokenFactory.ringFraction(rangeStart, rangeEnd)
-    
-    def totalSizeInBytes: Long = 
+
+    def totalSizeInBytes: Long =
       partitionsCount * meanPartitionSize
   }
 
@@ -84,7 +84,7 @@ class DataSizeEstimates[V, T <: Token[V]](
       }
     }
 
-  private lazy val ringFraction = 
+  private lazy val ringFraction =
     tokenRanges.map(_.ringFraction).sum
 
   /** Estimates the total number of partitions in a ring */

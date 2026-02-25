@@ -35,19 +35,19 @@ class TupleColumnMapper[T : TypeTag] extends ColumnMapper[T] {
   override def columnMapForReading(
       struct: StructDef,
       selectedColumns: IndexedSeq[ColumnRef]): ColumnMapForReading = {
-    
+
     require(
       ctorLength <= selectedColumns.length,
       s"Not enough columns selected from ${struct.name}. " +
         s"Only ${selectedColumns.length} column(s) were selected, but $ctorLength are required. " +
         s"Selected columns: [${selectedColumns.mkString(", ")}]")
-    
+
     SimpleColumnMapForReading(
       constructor = selectedColumns.take(ctorLength),
       setters = Map.empty[String, ColumnRef],
       allowsNull = false)
   }
-  
+
   override def columnMapForWriting(struct: StructDef, selectedColumns: IndexedSeq[ColumnRef]) = {
     val GetterRegex = "_([0-9]+)".r
 
@@ -85,7 +85,7 @@ class TupleColumnMapper[T : TypeTag] extends ColumnMapper[T] {
 
     SimpleColumnMapForWriting(getters)
   }
-  
+
   override def newTable(
     keyspaceName: String,
     tableName: String,

@@ -39,7 +39,7 @@ object ByteBufferUtil {
   /** Converts a byte buffer into an array.
     * The buffer's position remains untouched. */
   def toArray(buffer: ByteBuffer): Array[Byte] = {
-    if (buffer.hasArray && 
+    if (buffer.hasArray &&
           buffer.arrayOffset + buffer.position() == 0 &&
           buffer.remaining == buffer.array.length) {
       buffer.array

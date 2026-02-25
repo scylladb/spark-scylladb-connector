@@ -149,7 +149,9 @@ class CassandraCatalog extends CatalogPlugin
 
     if (getMetadata(connector).getKeyspace(fromInternal(namespace.head)).isPresent) throw new NamespaceAlreadyExistsException(namespace)
     val createStmt = SchemaBuilder.createKeyspace(namespace.head)
-    val replicationClass = ksMeta.getOrElse(ReplicationClass, throw new CassandraCatalogException(s"Creating a keyspace requires a $ReplicationClass DBOption for the replication strategy class"))
+    val replicationClass = ksMeta.getOrElse(ReplicationClass,
+      throw new CassandraCatalogException(
+        s"Creating a keyspace requires a $ReplicationClass DBOption for the replication strategy class"))
     val createWithReplication = replicationClass.toLowerCase(Locale.ROOT) match {
       case SimpleStrategy =>
         val replicationFactor = ksMeta.getOrElse(ReplicationFactor,
@@ -254,7 +256,9 @@ class CassandraCatalog extends CatalogPlugin
     //There is an implicit for this but it's only accessible in org.apache.spark.sql.catalog (maybe we should use it)
     val invalidPartitions = partitions.filter(_.name() != "identity")
     if (invalidPartitions.nonEmpty) {
-      throw new UnsupportedOperationException(s"Cassandra Tables can only by partitioned based on direct references to columns, found: ${invalidPartitions.mkString(",")}")
+      throw new UnsupportedOperationException(
+        s"Cassandra Tables can only by partitioned based on direct references to columns, " +
+          s"found: ${invalidPartitions.mkString(",")}")
     }
 
     val providedPartitionKeyNames = partitions.map(_.references().head.fieldNames().head)
@@ -308,7 +312,9 @@ class CassandraCatalog extends CatalogPlugin
       val dataType =
         columnToType.get(fromInternal(ckName._1.asInternal().toLowerCase(Locale.ROOT))) //Check for lower Cased column name as well
           .orElse(columnToType.get(ckName._1))
-          .getOrElse(throw new CassandraCatalogException(s"$ckName was defined as a clustering key but it does not exist in the schema ${schema.fieldNames.mkString(",")}"))
+          .getOrElse(throw new CassandraCatalogException(
+            s"$ckName was defined as a clustering key but it does not exist in the schema " +
+              s"${schema.fieldNames.mkString(",")}"))
       createTable
         .withClusteringColumn(ckName._1, dataType)
         .withClusteringOrder(ckName._1, ckName._2)

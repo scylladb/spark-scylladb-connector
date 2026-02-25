@@ -53,14 +53,16 @@ import scala.language.reflectiveCalls
   * The connection options are:
   *   - `spark.cassandra.connection.host`:               contact points to connect to the Cassandra cluster, defaults to spark master host
   *   - `spark.cassandra.connection.port`:               Cassandra native port, defaults to 9042
-  *   - `spark.cassandra.connection.factory`:            name of a Scala module or class implementing [[CassandraConnectionFactory]] that allows to plugin custom code for connecting to Cassandra
+  *   - `spark.cassandra.connection.factory`:            name of a Scala module or class implementing
+  *                                                      [[CassandraConnectionFactory]] that allows to plugin custom code for connecting to Cassandra
   *   - `spark.cassandra.connection.keepAliveMS`:      how long to keep unused connection before closing it (default 250 ms)
   *   - `spark.cassandra.connection.timeoutMS`:         how long to wait for connection to the Cassandra cluster (default 5 s)
   *   - `spark.cassandra.connection.reconnectionDelayMS.min`: initial delay determining how often to try to reconnect to a dead node (default 1 s)
   *   - `spark.cassandra.connection.reconnectionDelayMS.max`: final delay determining how often to try to reconnect to a dead node (default 60 s)
   *   - `spark.cassandra.auth.username`:                        login for password authentication
   *   - `spark.cassandra.auth.password`:                        password for password authentication
-  *   - `spark.cassandra.auth.conf.factory`:                    name of a Scala module or class implementing [[AuthConfFactory]] that allows to plugin custom authentication configuration
+  *   - `spark.cassandra.auth.conf.factory`:                    name of a Scala module or class implementing
+  *                                                             [[AuthConfFactory]] that allows to plugin custom authentication configuration
   *   - `spark.cassandra.query.retry.count`:                    how many times to reattempt a failed query (default 10)
   *   - `spark.cassandra.read.timeoutMS`:                      maximum period of time to wait for a read to return
   *   - `spark.cassandra.connection.ssl.enabled`:               enable secure connection to Cassandra cluster

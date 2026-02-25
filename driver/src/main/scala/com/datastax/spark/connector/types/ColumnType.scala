@@ -25,7 +25,16 @@ import java.util.{Date, UUID}
 import com.datastax.dse.driver.api.core.`type`.DseDataTypes
 import com.datastax.oss.driver.api.core.DefaultProtocolVersion.V4
 import com.datastax.oss.driver.api.core.ProtocolVersion
-import com.datastax.oss.driver.api.core.`type`.{DataType, DataTypes => DriverDataTypes, ListType => DriverListType, MapType => DriverMapType, SetType => DriverSetType, TupleType => DriverTupleType, UserDefinedType => DriverUserDefinedType, VectorType => DriverVectorType}
+import com.datastax.oss.driver.api.core.`type`.{
+  DataType,
+  DataTypes => DriverDataTypes,
+  ListType => DriverListType,
+  MapType => DriverMapType,
+  SetType => DriverSetType,
+  TupleType => DriverTupleType,
+  UserDefinedType => DriverUserDefinedType,
+  VectorType => DriverVectorType
+}
 import com.datastax.spark.connector.util._
 
 
@@ -104,6 +113,7 @@ object ColumnType {
   }
 
   /** Returns natural Cassandra type for representing data of the given Scala type */
+  // scalastyle:off cyclomatic.complexity
   def fromScalaType(
     dataType: Type,
     protocolVersion: ProtocolVersion = ProtocolVersion.DEFAULT): ColumnType[_] = {
@@ -163,6 +173,7 @@ object ColumnType {
       }
     }
   }
+  // scalastyle:on cyclomatic.complexity
 
   /** Returns a converter that converts values to the type of this column expected by the
     * Cassandra Java driver when saving the row.*/
@@ -172,7 +183,9 @@ object ColumnType {
     val converter: TypeConverter[_] =
       dataType match {
         case list: DriverListType => TypeConverter.javaArrayListConverter(converterToCassandra(list.getElementType))
-        case vec: DriverVectorType => TypeConverter.cqlVectorConverter(vec.getDimensions)(converterToCassandra(vec.getElementType).asInstanceOf[TypeConverter[Number]])
+        case vec: DriverVectorType =>
+          TypeConverter.cqlVectorConverter(vec.getDimensions)(
+            converterToCassandra(vec.getElementType).asInstanceOf[TypeConverter[Number]])
         case set: DriverSetType => TypeConverter.javaHashSetConverter(converterToCassandra(set.getElementType))
         case map: DriverMapType => TypeConverter.javaHashMapConverter(converterToCassandra(map.getKeyType), converterToCassandra(map.getValueType))
         case udt: DriverUserDefinedType => new UserDefinedType.DriverUDTValueConverter(udt)

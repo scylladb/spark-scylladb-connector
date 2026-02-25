@@ -81,7 +81,7 @@ class GettableDataToMappedTypeConverter[T : TypeTag : ColumnMapper](
     val tpe = typeTag[U].tpe
     if (tpe.typeSymbol.fullName startsWith "scala.Tuple")
       new TupleColumnMapper[U]
-    else if (isJavaBean) 
+    else if (isJavaBean)
       new JavaBeanColumnMapper[U]()(ReflectionUtil.classTag[U])
     else
       new DefaultColumnMapper[U]

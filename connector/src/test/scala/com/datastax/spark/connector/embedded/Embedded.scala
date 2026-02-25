@@ -51,7 +51,8 @@ private[embedded] trait EmbeddedIO {
       val input = Source.fromInputStream(source, "UTF-8")
       for (line <- input.getLines()) {
         val substituted = regex.replaceAllIn(line, m => map(m.group(1)))
-        writer.println(substituted)
+        writer.write(substituted)
+        writer.write("\n")
       }
     }
   }

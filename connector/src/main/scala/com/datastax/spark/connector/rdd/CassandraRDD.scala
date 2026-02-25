@@ -41,7 +41,7 @@ abstract class CassandraRDD[R : ClassTag](
     * without lying to the compiler by explicit casts.
     * Here SelfType is used to return a copy of the object - a different instance of the same type */
   type Self <: CassandraRDD[R]
-  
+
   ConfigCheck.checkConfig(sc.getConf)
 
 
@@ -78,7 +78,7 @@ abstract class CassandraRDD[R : ClassTag](
   /** Allows to set custom read configuration, e.g. consistency level or fetch size. */
   def withReadConf(readConf: ReadConf): Self =
     copy(readConf = readConf)
-  
+
   /** Returns a copy of this Cassandra RDD with specified connector */
   def withConnector(connector: CassandraConnector): Self = {
     copy(connector = connector)
@@ -86,8 +86,8 @@ abstract class CassandraRDD[R : ClassTag](
 
   /** Adds a CQL `WHERE` predicate(s) to the query.
     * Useful for leveraging secondary indexes in Cassandra.
-    * Implicitly adds an `ALLOW FILTERING` clause to the WHERE clause, 
-    * however beware that some predicates might be rejected by Cassandra, 
+    * Implicitly adds an `ALLOW FILTERING` clause to the WHERE clause,
+    * however beware that some predicates might be rejected by Cassandra,
     * particularly in cases when they filter on an unindexed, non-clustering column. */
   def where(cql: String, values: Any*): Self = {
     copy(where = where and CqlWhereClause(Seq(cql), values))
@@ -136,7 +136,7 @@ abstract class CassandraRDD[R : ClassTag](
   }
 
   def withAscOrder: Self = clusteringOrder(Ascending)
-  
+
   def withDescOrder: Self = clusteringOrder(Descending)
 
   override def take(num: Int): Array[R] = {

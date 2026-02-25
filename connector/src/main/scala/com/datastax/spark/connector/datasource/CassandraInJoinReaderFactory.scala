@@ -69,7 +69,10 @@ abstract class CassandraBaseInJoinReader(
   protected val rowWriter = CassandraRowWriter.Factory.rowWriter(tableDef, joinColumnNames)
   protected val rowReader = new UnsafeRowReaderFactory(schema).rowReader(tableDef, cqlQueryParts.selectedColumnRefs)
 
-  protected val keyIterator: Iterator[CassandraRow] = InClauseKeyGenerator.getIterator(numberedInputPartition.index, numberedInputPartition.total, inClauses) //Generate Iterators for this partition here
+  //Generate Iterators for this partition here
+  protected val keyIterator: Iterator[CassandraRow] =
+    InClauseKeyGenerator.getIterator(
+      numberedInputPartition.index, numberedInputPartition.total, inClauses)
 
   protected val stmt = JoinHelper.getJoinQueryString(tableDef, joinColumnNames, cqlQueryParts)
   protected val preparedStatement = JoinHelper.getJoinPreparedStatement(session, stmt, readConf.consistencyLevel)

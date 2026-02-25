@@ -108,7 +108,7 @@ object InputMetricsUpdater {
     private val updateMetricsCmd = new Runnable {
       private var lastCnt: Long = 0
       private var lastDataLength: Long = 0
-      
+
       override def run(): Unit = {
         // Codahale metrics introduce some overhead so in order to minimize it we can update them not
         // that often
@@ -118,7 +118,7 @@ object InputMetricsUpdater {
         lastDataLength = _dataLength
       }
     }
-    
+
     private val schedule = scheduledExecutor
         .scheduleAtFixedRate(updateMetricsCmd, interval.toMillis, interval.toMillis, TimeUnit.MILLISECONDS)
 

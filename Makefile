@@ -287,8 +287,8 @@ compile: resolve-scala-version ## Compile all modules
 test-unit: resolve-scala-version ## Run unit tests
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) test
 
-lint: resolve-scala-version ## Check code with scalafix
-	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) "scalafix --check" "Test/scalafix --check" "IntegrationTest/scalafix --check"
+lint: resolve-scala-version ## Check code with scalafix and scalastyle
+	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) "scalafix --check" "Test/scalafix --check" "IntegrationTest/scalafix --check" scalastyle Test/scalastyle
 
 lint-fix: resolve-scala-version ## Auto-fix scalafix issues
 	@JAVA_TOOL_OPTIONS="$(JAVA_TOOL_OPTIONS)" $(SBT_CMD) scalafix Test/scalafix IntegrationTest/scalafix

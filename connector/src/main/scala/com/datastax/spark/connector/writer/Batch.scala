@@ -26,7 +26,7 @@ import scala.collection.mutable.ArrayBuffer
 private[writer] sealed trait Batch extends Ordered[Batch] {
   protected[Batch] val buf: ArrayBuffer[RichBoundStatementWrapper]
   protected[Batch] var _bytesCount = 0
-  
+
   /** Returns `true` if the element has been successfully added. Returns `false` if the element
     * cannot be added because adding it would violate the size limitation. If `force` is set to `true`,
     * it adds the item regardless of size limitations and always returns `true`. */

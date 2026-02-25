@@ -19,7 +19,10 @@
 package com.datastax.spark.connector.cql
 
 import com.datastax.oss.driver.api.core.`type`.UserDefinedType
-import com.datastax.oss.driver.api.core.metadata.schema.{AggregateMetadata, FunctionMetadata, KeyspaceMetadata, SchemaChangeListener, TableMetadata, ViewMetadata}
+import com.datastax.oss.driver.api.core.metadata.schema.{
+  AggregateMetadata, FunctionMetadata, KeyspaceMetadata,
+  SchemaChangeListener, TableMetadata, ViewMetadata
+}
 import org.slf4j.LoggerFactory
 
 import scala.collection.concurrent.TrieMap

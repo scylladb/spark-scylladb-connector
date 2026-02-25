@@ -30,7 +30,12 @@ import com.datastax.spark.connector.util.{Logging, ReflectionUtil}
 import com.datastax.spark.connector.{ColumnRef, RowCountRef, TTL, WriteTime}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.cassandra.CassandraSourceRelation.{AdditionalCassandraPushDownRulesParam, InClauseToJoinWithTableConversionThreshold}
-import org.apache.spark.sql.cassandra.{AnalyzedPredicates, Auto, BasicCassandraPredicatePushDown, CassandraPredicateRules, CassandraSourceRelation, DsePredicateRules, DseSearchOptimizationSetting, InClausePredicateRules, Off, On, SolrConstants, SolrPredicateRules, TimeUUIDPredicateRules}
+import org.apache.spark.sql.cassandra.{
+  AnalyzedPredicates, Auto, BasicCassandraPredicatePushDown,
+  CassandraPredicateRules, CassandraSourceRelation, DsePredicateRules,
+  DseSearchOptimizationSetting, InClausePredicateRules, Off, On,
+  SolrConstants, SolrPredicateRules, TimeUUIDPredicateRules
+}
 import org.apache.spark.sql.connector.expressions.{Expression, Expressions}
 import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.connector.read.partitioning.{KeyGroupedPartitioning, Partitioning}
@@ -219,7 +224,9 @@ case class CassandraScanBuilder(
     * - contains IN key values and the cartesian set of those values is greater than threshold
     */
   private def isConvertableToJoinWithCassandra(predicates: AnalyzedPredicates): Boolean = {
-    val inClauseConversionThreshold = consolidatedConf.getLong(InClauseToJoinWithTableConversionThreshold.name, InClauseToJoinWithTableConversionThreshold.default)
+    val inClauseConversionThreshold = consolidatedConf.getLong(
+      InClauseToJoinWithTableConversionThreshold.name,
+      InClauseToJoinWithTableConversionThreshold.default)
     if (inClauseConversionThreshold == 0L || !pushdownEnabled) {
       false
     } else {

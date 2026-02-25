@@ -19,7 +19,10 @@
 package com.datastax.spark.connector.cql
 
 import com.datastax.oss.driver.api.core.`type`.UserDefinedType
-import com.datastax.oss.driver.api.core.metadata.schema.{AggregateMetadata, FunctionMetadata, KeyspaceMetadata, SchemaChangeListener, TableMetadata, ViewMetadata}
+import com.datastax.oss.driver.api.core.metadata.schema.{
+  AggregateMetadata, FunctionMetadata, KeyspaceMetadata,
+  SchemaChangeListener, TableMetadata, ViewMetadata
+}
 import org.scalatest.concurrent.Eventually
 import org.scalatest.{BeforeAndAfterEach, FlatSpec, Matchers}
 import org.scalatestplus.mockito.MockitoSugar

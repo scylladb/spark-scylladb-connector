@@ -46,7 +46,7 @@ object MagicalTypeTricks {
    * import com.datastax.spark.connector.util.MagicalTypeTricks._
    *
    * def function[T](t: T)(implicit ev: (λ[T] <:< (Int ∪ String))) = {
-   *   println("t = " + t)
+   *   System.out.print("t = " + t + "\n")
    * }
    *
    * function(5)      // t = 5

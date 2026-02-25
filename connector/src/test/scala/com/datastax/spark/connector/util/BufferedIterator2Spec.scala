@@ -79,6 +79,6 @@ class BufferedIterator2Spec extends FlatSpec with Matchers {
     val iterator = new BufferedIterator2(Seq(1, 2).iterator)
     iterator.next()
     iterator.next()
-    a [NoSuchElementException] should be thrownBy iterator.next()
+    a[NoSuchElementException] should be thrownBy iterator.next()
   }
 }

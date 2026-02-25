@@ -36,6 +36,7 @@ object MappedToGettableDataConverter extends Logging {
     * pass through the classloader from the application provided
     * class to all converters created for children of this converter.
     */
+  // scalastyle:off method.length
   def apply[T : TypeTag : ColumnMapper](
     struct: StructDef,
     columnSelection: IndexedSeq[ColumnRef],
@@ -233,4 +234,5 @@ object MappedToGettableDataConverter extends Logging {
           null.asInstanceOf[struct.ValueRepr]
       }
     }
+  // scalastyle:on method.length
 }

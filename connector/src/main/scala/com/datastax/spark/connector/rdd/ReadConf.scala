@@ -26,7 +26,7 @@ import org.apache.spark.SparkConf
 /** Read settings for RDD
   *
   * @param splitCount number of partitions to divide the data into; unset by default
-  * @param splitSizeInMB size of Cassandra data to be read in a single Spark task; 
+  * @param splitSizeInMB size of Cassandra data to be read in a single Spark task;
   *                      determines the number of partitions, but ignored if `splitCount` is set
   * @param fetchSizeInRows number of CQL rows to fetch in a single round-trip to Cassandra
   * @param consistencyLevel consistency level for reads, default LOCAL_ONE;
@@ -89,7 +89,7 @@ object ReadConf extends Logging {
     name = "spark.cassandra.input.consistency.level",
     section = ReferenceSection,
     default = DefaultConsistencyLevel.LOCAL_ONE,
-    description = """Consistency level to use when reading	""")
+    description = """Consistency level to use when reading""")
 
   val TaskMetricParam = ConfigParameter[Boolean](
     name = "spark.cassandra.input.metrics",

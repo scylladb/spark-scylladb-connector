@@ -23,7 +23,7 @@ import org.scalatest.{FlatSpec, Matchers}
 class Murmur3TokenFactorySpec extends FlatSpec with Matchers {
 
   val factory = TokenFactory.Murmur3TokenFactory
-  
+
   "Murmur3TokenFactory" should "create a token from String" in {
     factory.tokenFromString("0") shouldBe LongToken(0L)
     factory.tokenFromString("-1") shouldBe LongToken(-1L)

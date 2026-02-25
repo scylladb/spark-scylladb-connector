@@ -41,7 +41,10 @@ class ConsolidateSettingsSpec extends FlatSpec with Matchers {
     val sc = this.sparkConf.clone().setAll(sparkConf)
 
     val consolidatedConf1 = consolidateConfs(sc, sqlContextConf, tableRef.cluster.get, tableRef.keyspace, CaseInsensitiveMap(tableConf))
-    val consolidatedConf2 = consolidateConfs(sc, sqlContextConf, tableRefDefaultCluster.cluster.getOrElse("default"), tableRefDefaultCluster.keyspace, CaseInsensitiveMap(Map.empty))
+    val consolidatedConf2 = consolidateConfs(
+      sc, sqlContextConf,
+      tableRefDefaultCluster.cluster.getOrElse("default"),
+      tableRefDefaultCluster.keyspace, CaseInsensitiveMap(Map.empty))
     consolidatedConf1.getOption(param.name) shouldBe value
     consolidatedConf2.getOption(param.name) shouldBe valueForDefaultCluster
   }

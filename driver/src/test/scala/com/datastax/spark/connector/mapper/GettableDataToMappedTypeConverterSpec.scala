@@ -426,6 +426,6 @@ class GettableDataToMappedTypeConverterSpec extends FlatSpec with Matchers {
   it should "throw NPE when trying to access its targetTypeTag after serialization/deserialization" in {
     val converter = new GettableDataToMappedTypeConverter[User](userTable, userTable.columnRefs)
     val deserialized = SerializationUtils.roundtrip(converter)
-    a [NullPointerException] should be thrownBy deserialized.targetTypeTag
+    a[NullPointerException] should be thrownBy deserialized.targetTypeTag
   }
 }

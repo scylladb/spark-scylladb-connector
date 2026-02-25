@@ -28,12 +28,12 @@ import com.datastax.bdp.spark.DseAuthConfFactory.DsePasswordAuthConf
 import com.datastax.bdp.test.ng.{DataGenerator, DseScalaTestBase, ToString, YamlProvider}
 
 class DseAuthConfFactorySpec extends FlatSpec with Matchers with DseScalaTestBase {
-  
+
   beforeClass {
     YamlProvider.provideDefaultYamls()
     YamlClientConfiguration.setAsClientConfigurationImpl()
   }
-  
+
   it should "produce equivalent AuthConf instances for the same SparkConf" in {
     def genAuthConf = DseAuthConfFactory.authConf(new SparkConf())
 
