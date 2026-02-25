@@ -32,7 +32,7 @@ class ColumnTypeSpec extends WordSpec with Matchers with GivenWhenThen {
   "A ColumnType companion object" should {
 
     "throw InvalidArgumentException if given unsupported type" in {
-      an [IllegalArgumentException] should be thrownBy ColumnType.fromScalaType(typeOf[ColumnTypeSpec])
+      an[IllegalArgumentException] should be thrownBy ColumnType.fromScalaType(typeOf[ColumnTypeSpec])
     }
 
     "allow to obtain a proper ColumnType" when {

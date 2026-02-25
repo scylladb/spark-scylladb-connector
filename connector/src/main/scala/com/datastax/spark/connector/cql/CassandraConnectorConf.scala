@@ -43,6 +43,10 @@ case class IpBasedContactInfo (
     case _ => false
   }
 
+  override def hashCode(): Int = {
+    hosts.hashCode() * 31 + authConf.hashCode()
+  }
+
   def apply(
     hosts: Set[InetAddress],
     port: Int = CassandraConnectorConf.ConnectionPortParam.default,
@@ -108,7 +112,11 @@ object CassandraConnectorConf extends Logging {
     trustStorePassword: Option[String] = None,
     trustStoreType: String = "JKS",
     protocol: String = "TLS",
-    enabledAlgorithms: Set[String] = Set("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384", "TLS_RSA_WITH_AES_128_CBC_SHA", "TLS_RSA_WITH_AES_256_CBC_SHA"),
+    enabledAlgorithms: Set[String] = Set(
+      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+      "TLS_RSA_WITH_AES_128_CBC_SHA",
+      "TLS_RSA_WITH_AES_256_CBC_SHA"),
     clientAuthEnabled: Boolean = false,
     keyStorePath: Option[String] = None,
     keyStorePassword: Option[String] = None,

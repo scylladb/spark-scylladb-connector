@@ -39,7 +39,7 @@ class ConfigCheckSpec extends FlatSpec with Matchers  {
 
   "ConfigCheck" should "throw an exception when the configuration contains a invalid spark.cassandra prop" in {
     val sparkConf = new SparkConf().set("spark.cassandra.foo.bar", "foobar")
-    val exception = the [ConnectorConfigurationException] thrownBy ConfigCheck.checkConfig(sparkConf)
+    val exception = the[ConnectorConfigurationException] thrownBy ConfigCheck.checkConfig(sparkConf)
     exception.getMessage should include ("spark.cassandra.foo.bar")
   }
 
@@ -84,7 +84,7 @@ class ConfigCheckSpec extends FlatSpec with Matchers  {
 
   it should "not give suggestions when the variable is very strange " in {
     val sparkConf = new SparkConf().set("spark.cassandra.foo.bar", "foobar")
-    val exception = the [ConnectorConfigurationException] thrownBy ConfigCheck.checkConfig(sparkConf)
+    val exception = the[ConnectorConfigurationException] thrownBy ConfigCheck.checkConfig(sparkConf)
     exception.getMessage shouldNot include ("Possible matches")
   }
 

@@ -23,7 +23,11 @@ import com.datastax.spark.connector.{ColumnName, SomeColumns}
 import com.datastax.spark.connector.rdd.{CassandraJoinRDD, CassandraLeftJoinRDD, CassandraTableScanRDD}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{And, Attribute, BindReferences, EqualTo, ExprId, Expression, GenericInternalRow, InterpretedPredicate, JoinedRow, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{
+  And, Attribute, BindReferences, EqualTo, ExprId, Expression,
+  GenericInternalRow, InterpretedPredicate, JoinedRow,
+  UnsafeProjection, UnsafeRow
+}
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.execution.datasources.v2.BatchScanExec
 import org.apache.spark.sql.execution.{DataSourceScanExec, SparkPlan, UnaryExecNode}

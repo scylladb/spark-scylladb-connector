@@ -32,7 +32,13 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.jdk.CollectionConverters._
 
-case class CassandraTable(session: SparkSession, catalogConf: CaseInsensitiveStringMap, connector: CassandraConnector, catalogName: String, metadata: RelationMetadata, optionalSchema: Option[StructType] = None) //Used for adding metadata references
+case class CassandraTable(
+  session: SparkSession,
+  catalogConf: CaseInsensitiveStringMap,
+  connector: CassandraConnector,
+  catalogName: String,
+  metadata: RelationMetadata,
+  optionalSchema: Option[StructType] = None) //Used for adding metadata references
 
   extends Table
     with SupportsRead

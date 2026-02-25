@@ -23,9 +23,23 @@ import com.datastax.oss.driver.api.core.ProtocolVersion
 import com.datastax.spark.connector.ColumnRef
 import com.datastax.spark.connector.cql._
 import com.datastax.spark.connector.datasource.CassandraSourceUtil
-import com.datastax.spark.connector.types.{BigIntType, BlobType, BooleanType, ColumnType, DateType, DecimalType, DoubleType, FloatType, IntType, ListType, MapType, SmallIntType, TimestampType, TinyIntType, VarCharType}
+import com.datastax.spark.connector.types.{
+  BigIntType, BlobType, BooleanType, ColumnType, DateType, DecimalType,
+  DoubleType, FloatType, IntType, ListType, MapType, SmallIntType,
+  TimestampType, TinyIntType, VarCharType
+}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.sql.types.{BooleanType => SparkSqlBooleanType, DataType => SparkSqlDataType, DateType => SparkSqlDateType, DecimalType => SparkSqlDecimalType, DoubleType => SparkSqlDoubleType, FloatType => SparkSqlFloatType, MapType => SparkSqlMapType, TimestampType => SparkSqlTimestampType, _}
+import org.apache.spark.sql.types.{
+  BooleanType => SparkSqlBooleanType,
+  DataType => SparkSqlDataType,
+  DateType => SparkSqlDateType,
+  DecimalType => SparkSqlDecimalType,
+  DoubleType => SparkSqlDoubleType,
+  FloatType => SparkSqlFloatType,
+  MapType => SparkSqlMapType,
+  TimestampType => SparkSqlTimestampType,
+  _
+}
 
 class DataFrameColumnMapper[T](structType: StructType) extends ColumnMapper[T] {
   override def columnMapForWriting(struct: StructDef,

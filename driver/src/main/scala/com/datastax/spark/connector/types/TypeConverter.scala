@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 
+// scalastyle:off number.of.types
 package com.datastax.spark.connector.types
 
 import java.math.BigInteger
@@ -87,6 +88,7 @@ class ChainedTypeConverter[T](converters: TypeConverter[T]*) extends NullableTyp
 /** Defines a set of converters and implicit functions used to look up an appropriate converter for
   * a desired type. Thanks to implicit method lookup, it is possible to implement a generic
   * method `CassandraRow#get`, which picks up the right converter basing solely on its type argument. */
+// scalastyle:off number.of.methods
 object TypeConverter {
 
   lazy val defaultTimezone = TimeZone.getDefault
@@ -1011,6 +1013,7 @@ object TypeConverter {
 
   private val originalConverters = converters.toSet
 
+  // scalastyle:off cyclomatic.complexity
   private def forCollectionType(tpe: Type, moreConverters: Seq[TypeConverter[_]]): TypeConverter[_] = {
     tpe match {
       case TypeRef(_, symbol, List(arg)) =>
@@ -1070,6 +1073,7 @@ object TypeConverter {
       case _ => throw new IllegalArgumentException(s"Unsupported type: $tpe")
     }
   }
+  // scalastyle:on cyclomatic.complexity
 
   /** Useful for getting converter based on a type received from Scala reflection.
     * Synchronized to workaround Scala 2.10 reflection thread-safety problems. */
@@ -1124,3 +1128,4 @@ object TypeConverter {
     }
   }
 }
+// scalastyle:on number.of.methods

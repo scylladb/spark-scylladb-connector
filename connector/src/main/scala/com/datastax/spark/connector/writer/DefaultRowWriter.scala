@@ -27,7 +27,7 @@ import com.datastax.spark.connector.mapper.{ColumnMapper, MappedToGettableDataCo
 /** A `RowWriter` suitable for saving objects mappable by a [[com.datastax.spark.connector.mapper.ColumnMapper ColumnMapper]].
   * Can save case class objects, java beans and tuples. */
 class DefaultRowWriter[T : TypeTag : ColumnMapper](
-    table: TableDef, 
+    table: TableDef,
     selectedColumns: IndexedSeq[ColumnRef])
   extends RowWriter[T] {
 

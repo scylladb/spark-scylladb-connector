@@ -184,7 +184,9 @@ object DefaultConnectionFactory extends CassandraConnectionFactory {
   }
 
   def continuousPagingEnabled(session: CqlSession): Boolean = {
-    val confEnabled = SparkEnv.get.conf.getBoolean(CassandraConnectionFactory.continuousPagingParam.name, CassandraConnectionFactory.continuousPagingParam.default)
+    val confEnabled = SparkEnv.get.conf.getBoolean(
+      CassandraConnectionFactory.continuousPagingParam.name,
+      CassandraConnectionFactory.continuousPagingParam.default)
     val pv = session.getContext.getProtocolVersion
     if (pv.getCode > DseProtocolVersion.DSE_V1.getCode && confEnabled) {
       logger.debug(s"Scan Method Being Set to Continuous Paging")

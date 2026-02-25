@@ -34,6 +34,7 @@ import org.apache.commons.lang3.SerializationUtils
 import org.junit.Assert._
 import org.junit.Test
 
+// scalastyle:off number.of.methods
 class TypeConverterTest {
 
   final val DefaultHost = "127.0.0.1"
@@ -676,3 +677,4 @@ class TypeConverterTest {
     assertEquals(TypeConverter.ByteArrayConverter, TypeConverter.forType(classOf[Array[Byte]]))
   }
 }
+// scalastyle:on number.of.methods

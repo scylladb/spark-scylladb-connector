@@ -127,7 +127,7 @@ object WriteConf {
     default = false,
     description =
       """Determines that the INSERT operation is not performed if a row with the same primary
-        				|key already exists. Using the feature incurs a performance hit.""".stripMargin)
+        |key already exists. Using the feature incurs a performance hit.""".stripMargin)
 
   val IgnoreNullsParam = ConfigParameter[Boolean](
     name = "spark.cassandra.output.ignoreNulls",
@@ -144,7 +144,7 @@ object WriteConf {
     default = 5,
     description = """Maximum number of batches executed in parallel by a
       | single Spark task""".stripMargin)
-  
+
   val ThroughputMiBPSParam = ConfigParameter[Option[Double]] (
     name = "spark.cassandra.output.throughputMBPerSec",
     section = ReferenceSection,
@@ -226,7 +226,7 @@ object WriteConf {
         TTLOption.defaultValue
       else
         TTLOption.constant(ttlSeconds)
-    
+
     val timestampMicros = conf.getLong(TimestampParam.name, TimestampParam.default)
 
     val timestampOption =

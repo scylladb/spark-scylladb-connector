@@ -70,7 +70,7 @@ class DefaultColumnMapper[T : TypeTag](columnNameOverride: Map[String, String] =
 
   def ctorParamToColumnName(paramName: String, columns: Map[String, ColumnRef]): Option[ColumnRef] =
     resolve(paramName, columns)
-  
+
   def getterToColumnName(getterName: String, columns: Map[String, ColumnRef]): Option[ColumnRef] =
     resolve(getterName, columns)
 
@@ -85,7 +85,7 @@ class DefaultColumnMapper[T : TypeTag](columnNameOverride: Map[String, String] =
   override def columnMapForReading(
       struct: StructDef,
       selectedColumns: IndexedSeq[ColumnRef]): ColumnMapForReading = {
-    
+
     val columns = columnByName(selectedColumns)
 
     val constructor =
@@ -101,7 +101,7 @@ class DefaultColumnMapper[T : TypeTag](columnNameOverride: Map[String, String] =
         columnRef <- setterToColumnName(setterName, columns)
       } yield (setterName, columnRef)
     }.toMap
-    
+
     SimpleColumnMapForReading(constructor, setterMap, allowsNull = false)
   }
 
@@ -125,7 +125,7 @@ class DefaultColumnMapper[T : TypeTag](columnNameOverride: Map[String, String] =
 
     SimpleColumnMapForWriting(getterMap)
   }
-  
+
   private def inheritedScalaGetters: Seq[(String, Type)] = {
     for {
       bc <- tpe.baseClasses if bc.fullName.startsWith("scala.")

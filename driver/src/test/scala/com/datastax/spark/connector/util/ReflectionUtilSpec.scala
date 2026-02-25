@@ -154,7 +154,7 @@ class ReflectionUtilSpec extends FlatSpec with Matchers with Conductors {
   }
 
   it should "throw IllegalArgumentException if the requested method is missing" in {
-    val exception = the [IllegalArgumentException] thrownBy
+    val exception = the[IllegalArgumentException] thrownBy
       ReflectionUtil.methodParamTypes(typeOf[ClassWithGetters], "unknownMethodName")
     exception.getMessage should include ("unknownMethodName")
     exception.getMessage should include ("ClassWithGetters")

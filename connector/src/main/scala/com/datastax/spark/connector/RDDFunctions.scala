@@ -176,11 +176,11 @@ class RDDFunctions[T](rdd: RDD[T]) extends WritableToCassandra[T] with Serializa
     selectedColumns: ColumnSelector = AllColumns,
     joinColumns: ColumnSelector = PartitionKeyColumns,
     readConf: ReadConf = ReadConf.fromSparkConf(rdd.sparkContext.getConf))(
-  implicit 
+  implicit
     connector: CassandraConnector = CassandraConnector(sparkContext),
-    newType: ClassTag[R], rrf: RowReaderFactory[R], 
+    newType: ClassTag[R], rrf: RowReaderFactory[R],
     ev: ValidRDDType[R],
-    currentType: ClassTag[T], 
+    currentType: ClassTag[T],
     rwf: RowWriterFactory[T]): CassandraJoinRDD[T, R] = {
 
     new CassandraJoinRDD[T, R](

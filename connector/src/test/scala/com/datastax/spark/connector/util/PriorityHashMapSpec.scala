@@ -209,20 +209,20 @@ class PriorityHashMapSpec extends WordSpec with Matchers {
 
     "throw NoSuchElement exception if requested a head of empty map" in {
       val emptyMap = new PriorityHashMap[Int, String](capacity)
-      an [NoSuchElementException] should be thrownBy emptyMap.headKey
-      an [NoSuchElementException] should be thrownBy emptyMap.headValue
+      an[NoSuchElementException] should be thrownBy emptyMap.headKey
+      an[NoSuchElementException] should be thrownBy emptyMap.headValue
     }
 
     "throw NoSuchElement exception if requested a non-existing key" in {
       val emptyMap = new PriorityHashMap[Int, String](capacity)
-      an [NoSuchElementException] should be thrownBy emptyMap(1)
+      an[NoSuchElementException] should be thrownBy emptyMap(1)
     }
 
     "throw IllegalStateException exception if trying to exceed allowed capacity" in {
       val m = new PriorityHashMap[Int, Int](capacity)
       for (i <- 0 until m.capacity)
         m.put(i, i)
-      an [IllegalStateException] should be thrownBy m.put(m.capacity, m.capacity)
+      an[IllegalStateException] should be thrownBy m.put(m.capacity, m.capacity)
 
       m.remove(0)
       m.put(m.capacity, m.capacity)  // now should be ok

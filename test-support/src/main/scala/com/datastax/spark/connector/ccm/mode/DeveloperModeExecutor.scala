@@ -30,7 +30,7 @@ class DeveloperModeExecutor(val config: CcmConfig) extends DefaultExecutor with 
 
   Runtime.getRuntime.addShutdownHook(new Thread("Serial shutdown hooks thread") {
     override def run(): Unit = {
-      println(s"\nCCM is running in developer mode. Cluster $clusterName will not be shutdown. It has to be shutdown " +
+      System.out.print(s"\nCCM is running in developer mode. Cluster $clusterName will not be shutdown. It has to be shutdown " +
         s"manually.\nUse `ccm list --config-dir=$dir` to see the list of developer mode clusters.\nActive cluster may " +
         s"be switched with `ccm switch $clusterName --config-dir=$dir` and then destroyed with " +
         s"`ccm remove --config-dir=$dir`.\n")
