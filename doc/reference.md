@@ -339,7 +339,7 @@ columname will be used to set the writetime for that row.</td>
 <tr>
   <td><code>spark.cassandra.input.consistency.level</code></td>
   <td>LOCAL_ONE</td>
-  <td>Consistency level to use when reading	</td>
+  <td>Consistency level to use when reading</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.input.fetch.sizeInRows</code></td>
