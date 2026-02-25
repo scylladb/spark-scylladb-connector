@@ -48,7 +48,9 @@ jobs:
       - name: Import GPG key
         env:
           PGP_SECRET: ${{ secrets.PGP_SECRET }}
-        run: echo "$PGP_SECRET" | base64 --decode | gpg --import --no-tty --batch --yes
+        run: |
+          echo "::add-mask::${PGP_SECRET}"
+          echo "$PGP_SECRET" | base64 --decode | gpg --import --no-tty --batch --yes
 
       - name: Configure Git user
         run: |
@@ -65,7 +67,11 @@ jobs:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}
-        run: make release
+        run: |
+          echo "::add-mask::${PGP_PASSPHRASE}"
+          echo "::add-mask::${SONATYPE_USERNAME}"
+          echo "::add-mask::${SONATYPE_PASSWORD}"
+          make release
 
       - name: Perform release dry-run
         if: inputs.dry-run == true
@@ -74,7 +80,11 @@ jobs:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}
-        run: make release-dry-run
+        run: |
+          echo "::add-mask::${PGP_PASSPHRASE}"
+          echo "::add-mask::${SONATYPE_USERNAME}"
+          echo "::add-mask::${SONATYPE_PASSWORD}"
+          make release-dry-run
 
       - name: Upload release logs
         if: always()
