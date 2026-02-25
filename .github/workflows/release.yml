@@ -78,7 +78,7 @@ jobs:
 
       - name: Upload release logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: sbt-stdout
           path: /tmp/spark-connector-release-logs/*.log
