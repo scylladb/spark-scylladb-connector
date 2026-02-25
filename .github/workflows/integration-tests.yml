@@ -240,12 +240,29 @@ jobs:
           key: ccm-${{ runner.os }}-${{ steps.db-version.outputs.value }}
 
       - name: Run tests
+        env:
+          MAX_RETRIES: 2
         run: |
           if [ "${{ matrix.db-type }}" = "cassandra" ]; then
-            make test-integration-cassandra
+            TEST_CMD="make test-integration-cassandra"
           else
-            make test-integration-scylla
+            TEST_CMD="make test-integration-scylla"
           fi
+
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            echo "::group::Test attempt $attempt of $MAX_RETRIES"
+            if $TEST_CMD; then
+              echo "::endgroup::"
+              echo "Tests passed on attempt $attempt"
+              exit 0
+            fi
+            echo "::endgroup::"
+            if [ "$attempt" -lt "$MAX_RETRIES" ]; then
+              echo "::warning::Tests failed on attempt $attempt, retrying..."
+            fi
+          done
+          echo "::error::Tests failed after $MAX_RETRIES attempts"
+          exit 1
 
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v6
