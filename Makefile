@@ -10,9 +10,9 @@ SHELL := bash
 
 MAKEFILE_PATH := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 SCYLLA_VERSION ?= LATEST
-GET_VERSION_VERSION := v0.3.0
-GET_VERSION_VERSION_NUM := 0.3.0
-GET_VERSION_CHECKSUM := b8335fb8ff5e0021c097e4853d8e604eabef2595c6ca71684f24306be0a117fd
+GET_VERSION_VERSION := v0.4.3
+GET_VERSION_VERSION_NUM := 0.4.3
+GET_VERSION_CHECKSUM := 2dfbf1afd596fc9efd68c7795bfa52df0fd69d0342237574a17521b14f173df3
 JAVA_OPENS?=-XX:+IgnoreUnrecognizedVMOptions --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED
 JAVA_VERSION_RAW:=$(shell java -version 2>&1 | head -n 1 | sed -E 's/.*"([0-9]+((\.|_)[0-9]+)*)".*/\1/')
 JAVA_MAJOR_VERSION:=$(word 1,$(subst ., ,$(JAVA_VERSION_RAW)))
