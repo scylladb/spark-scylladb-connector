@@ -143,48 +143,66 @@ Checklist for contributing changes to the project:
 Old issues from before the donation to the ASF and the Apache Cassandra project can be found in this [SPARKC JIRA](https://datastax-oss.atlassian.net/projects/SPARKC/issues)
 
 ## Testing
-To run unit and integration tests:
 
-    ./sbt/sbt test
-    ./sbt/sbt it:test
+Run `make help` to see all available targets. Common commands:
 
-Note that the integration tests require [CCM](https://github.com/apache/cassandra-ccm) to be installed on your machine.
-See [Tips for Developing the Spark Cassandra Connector](doc/developers.md) for details.
+```bash
+make compile                       # Compile all modules
+make test-unit                     # Run unit tests
+make lint                          # Check code with scalafix
+make lint-fix                      # Auto-fix scalafix issues
+make test-integration-cassandra    # Run integration tests with Cassandra
+make test-integration-scylla       # Run integration tests with ScyllaDB
+```
 
-By default, integration tests start up a separate, single Cassandra instance and run Spark in local mode.
-It is possible to run integration tests with your own Spark cluster.
-First, prepare a jar with testing code:
+Integration tests require [CCM](https://github.com/apache/cassandra-ccm) (Cassandra Cluster Manager), Python 3.10+, and Java 17. Install CCM via `make install-cassandra-ccm` or `make install-scylla-ccm`.
 
-    ./sbt/sbt test:package
+Version aliases like `LATEST`, `LTS-LATEST`, and `4-LATEST` are resolved automatically:
 
-Then copy the generated test jar to your Spark nodes and run:    
+```bash
+CASSANDRA_VERSION=4-LATEST make test-integration-cassandra
+SCYLLA_VERSION=LATEST make test-integration-scylla
+```
 
-    export IT_TEST_SPARK_MASTER=<Spark Master URL>
-    ./sbt/sbt it:test
+Or use exact versions:
 
-## Generating Documents
-To generate the Reference Document use
+```bash
+CASSANDRA_VERSION=4.1.7 make test-integration-cassandra
+SCYLLA_VERSION=2024.2.1 make test-integration-scylla
+```
 
-    ./sbt/sbt spark-cassandra-connector-unshaded/run (outputLocation)
+## CI/CD
 
-outputLocation defaults to doc/reference.md
+The project uses GitHub Actions. Workflows are in `.github/workflows/`.
+
+### Integration Tests (`integration-tests.yml`)
+
+Runs on every push and PR to `scylla-4.x`:
+
+1. **Compile** -- Compiles all modules
+2. **Lint** -- Runs scalafix checks
+3. **Test Matrix** -- Integration tests across database types and versions (ScyllaDB LATEST/LTS-LATEST, Cassandra 3-LATEST/4-LATEST/5-LATEST)
+
+Can also be triggered manually with custom database and Scala version inputs.
+
+### Release (`release.yml`)
+
+Manual workflow for publishing to Maven Central. Options: `dry-run`, `skip-tests`, `target-tag` (for re-releases).
+
+The workflow removes `-SNAPSHOT` from the version, creates a tag, publishes the signed artifact to Maven Central via Sonatype, then bumps the version for the next development iteration.
+
+### Debugging CI Failures
+
+1. Check the failing job's logs in the GitHub Actions tab
+2. Look for test report annotations on the PR
+3. Reproduce locally with the same `make` target and environment variables
+4. For CCM issues, verify version resolution: `make resolve-cassandra-version` or `make resolve-scylla-version`
 
 ## Branching Model
 
 Our branch `scylla-4.x` is based off commit `dbbf02890605692d163572cda4b2462993754d7b`. It introduces binary incompatible changes compared to the upstream version 3.5.x.
 
 We should occasionally merge the upstream changes to our fork.
-
-## Release Process
-
-Create a [new GitHub release](https://github.com/scylladb/spark-scylladb-connector/releases), give it a tag name (please see the rules below), a title, and a description. You can generate the changelog automatically from the GitHub UI. Click Publish. A workflow will be automatically triggered and will build the project and release it on [Sonatype](https://central.sonatype.org).
-
-Rules for the release tag name:
-
-- Make sure to use tag names like `v1.2.3`, starting with `v` and followed by a [semantic version number](https://semver.org).
-- Bump the major version number if the new release breaks the backward compatibility (e.g., an existing configuration or setup will not work anymore with the new release).
-- Bump the minor version number if the new release introduces new features in a backward compatible manner.
-- Bump the patch version number if the new release only introduces bugfixes in a backward compatible manner.
 
 ## License
 
