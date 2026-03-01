@@ -18,7 +18,7 @@
 
 package com.datastax.spark.connector.writer
 
-import java.util.concurrent.{CompletableFuture, CompletionStage, Semaphore}
+import java.util.concurrent.{CompletableFuture, CompletionStage, Executors, ScheduledExecutorService, Semaphore, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.BiConsumer
 import com.datastax.spark.connector.util.Logging
@@ -95,8 +95,7 @@ class AsyncExecutor[T, R](asyncAction: T => CompletionStage[R], maxConcurrentTas
             if (attempt <= maxRetries) {
               val delayMs = math.min(BaseRetryDelayMs * (1L << math.min(attempt - 1, MaxBackoffShift)), MaxRetryDelayMs)
               logTrace(s"${throwable.getClass.getSimpleName} ... Retrying (attempt $attempt/$maxRetries, backoff ${delayMs}ms)")
-              Thread.sleep(delayMs)
-              tryFuture()
+              RetryScheduler.schedule(new Runnable { def run(): Unit = tryFuture() }, delayMs, TimeUnit.MILLISECONDS)
             } else {
               logError(s"Failed to execute after $maxRetries retries: " + task, throwable)
               latestException = Some(throwable)
@@ -146,4 +145,11 @@ object AsyncExecutor {
   val BaseRetryDelayMs: Long = 100
   val MaxRetryDelayMs: Long = 5000
   val MaxBackoffShift: Int = 6 // caps the bit shift to avoid overflow: 100 * 2^6 = 6400 -> clamped to 5000
+
+  private[writer] val RetryScheduler: ScheduledExecutorService =
+    Executors.newScheduledThreadPool(1, (r: Runnable) => {
+      val t = new Thread(r, "async-executor-retry-scheduler")
+      t.setDaemon(true)
+      t
+    })
 }
