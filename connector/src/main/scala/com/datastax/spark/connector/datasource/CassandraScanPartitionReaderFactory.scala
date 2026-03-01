@@ -124,7 +124,8 @@ abstract class CassandraPartitionReaderBase
   protected def getIterator(): Iterator[InternalRow] = {
     // Prepare the scan statement once and reuse across all token ranges in this partition.
     // The CQL template is identical for every range — only bind values differ.
-    val preparedStmt = tokenRanges.headOption.map { firstRange =>
+    // Must be lazy because `scanner` is initialized after `getIterator()` is called.
+    lazy val preparedStmt = tokenRanges.headOption.map { firstRange =>
       val (cql, _) = ScanHelper.tokenRangeToCqlQuery(firstRange, tableDef, queryParts)
       ScanHelper.prepareScanStatement(scanner.getSession(), cql)
     }
