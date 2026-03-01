@@ -85,11 +85,11 @@ private[connector] class BoundStatementBuilder[T](
     columnValue: AnyRef): Unit = {
 
     if (columnValue == Unset || (ignoreNulls && columnValue == null)) {
-      boundStatement.update(s => s.setToNull(columnName))
+      boundStatement.setToNull(columnName)
       logUnsetToNullWarning = true
     } else {
       val codec = CodecRegistryUtil.codecFor(boundStatement.stmt.codecRegistry(),columnType, columnValue)
-      boundStatement.update(s => s.set(columnName, columnValue, codec))
+      boundStatement.set(columnName, columnValue, codec)
     }
   }
 
@@ -103,7 +103,7 @@ private[connector] class BoundStatementBuilder[T](
       //Do not bind
     } else {
       val codec = CodecRegistryUtil.codecFor(boundStatement.stmt.codecRegistry(),columnType, columnValue)
-      boundStatement.update(s => s.set(columnName, columnValue, codec))
+      boundStatement.set(columnName, columnValue, codec)
     }
   }
 
@@ -142,7 +142,7 @@ private[connector] class BoundStatementBuilder[T](
     }
 
     if (hasAutoTimestamp) {
-      boundStatement.update(_.setLong(TableWriter.AutoTimestampParam, autoTsCounter.getAndIncrement()))
+      boundStatement.setLong(TableWriter.AutoTimestampParam, autoTsCounter.getAndIncrement())
     }
 
     boundStatement.bytesCount = bytesCount
