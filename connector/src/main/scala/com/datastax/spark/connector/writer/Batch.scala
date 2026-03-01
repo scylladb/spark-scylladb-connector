@@ -32,8 +32,8 @@ private[writer] sealed trait Batch extends Ordered[Batch] {
     * it adds the item regardless of size limitations and always returns `true`. */
   def add(stmt: RichBoundStatementWrapper, force: Boolean = false): Boolean
 
-  /** Collected statements */
-  def statements: Seq[RichBoundStatementWrapper] = buf.toSeq
+  /** Collected statements as a read-only view (avoids copying the underlying buffer). */
+  def statements: scala.collection.Seq[RichBoundStatementWrapper] = buf
 
   /** Only for internal use - batches are compared by this value. */
   protected[Batch] def size: Int
