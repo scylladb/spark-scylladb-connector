@@ -19,6 +19,7 @@
 package com.datastax.spark.connector.writer
 
 import com.datastax.oss.driver.api.core.`type`.DataType
+import com.datastax.oss.driver.api.core.`type`.codec.TypeCodec
 import com.datastax.oss.driver.api.core.cql.{BoundStatement, PreparedStatement}
 import com.datastax.oss.driver.api.core.{DefaultProtocolVersion, ProtocolVersion}
 import com.datastax.spark.connector.types.{ColumnType, Unset}
@@ -40,6 +41,7 @@ private[connector] class BoundStatementBuilder[T](
   private val columnTypes = columnNames.map(preparedStmt.getVariableDefinitions.get(_).getType)
   private val converters = columnTypes.map(ColumnType.converterToCassandra(_))
   private val buffer = Array.ofDim[Any](columnNames.size)
+  private val cachedCodecs = new Array[TypeCodec[AnyRef]](columnNames.size)
 
   /** Whether the prepared statement contains an auto-timestamp placeholder that
     * needs to be bound with a unique, incrementing microsecond timestamp per row. */
@@ -81,29 +83,27 @@ private[connector] class BoundStatementBuilder[T](
   private def bindColumnNull(
     boundStatement: RichBoundStatementWrapper,
     columnName: String,
-    columnType: DataType,
-    columnValue: AnyRef): Unit = {
+    columnValue: AnyRef,
+    codec: TypeCodec[AnyRef]): Unit = {
 
     if (columnValue == Unset || (ignoreNulls && columnValue == null)) {
-      boundStatement.setToNull(columnName)
+      boundStatement.update(s => s.setToNull(columnName))
       logUnsetToNullWarning = true
     } else {
-      val codec = CodecRegistryUtil.codecFor(boundStatement.stmt.codecRegistry(),columnType, columnValue)
-      boundStatement.set(columnName, columnValue, codec)
+      boundStatement.update(s => s.set(columnName, columnValue, codec))
     }
   }
 
   private def bindColumnUnset(
     boundStatement: RichBoundStatementWrapper,
     columnName: String,
-    columnType: DataType,
-    columnValue: AnyRef): Unit = {
+    columnValue: AnyRef,
+    codec: TypeCodec[AnyRef]): Unit = {
 
     if (columnValue == Unset || (ignoreNulls && columnValue == null)) {
       //Do not bind
     } else {
-      val codec = CodecRegistryUtil.codecFor(boundStatement.stmt.codecRegistry(),columnType, columnValue)
-      boundStatement.set(columnName, columnValue, codec)
+      boundStatement.update(s => s.set(columnName, columnValue, codec))
     }
   }
 
@@ -112,7 +112,7 @@ private[connector] class BoundStatementBuilder[T](
   * we can leave values in the prepared statement unset. If the version is
   * less than V3 then we need to place a `null` in the bound statement.
   */
-  val bindColumn: (RichBoundStatementWrapper, String, DataType, AnyRef) => Unit = protocolVersion match {
+  val bindColumn: (RichBoundStatementWrapper, String, AnyRef, TypeCodec[AnyRef]) => Unit = protocolVersion match {
     case pv if pv.getCode() <= DefaultProtocolVersion.V3.getCode => bindColumnNull
     case _ => bindColumnUnset
   }
@@ -130,19 +130,28 @@ private[connector] class BoundStatementBuilder[T](
     val boundStatement = new RichBoundStatementWrapper(preparedStmt.bind(prefixConverted: _*))
 
     rowWriter.readColumnValues(row, buffer)
+    val codecRegistry = boundStatement.stmt.codecRegistry()
     var bytesCount = 0
     for (i <- columnNames.indices) {
       val converter = converters(i)
       val columnName = columnNames(i)
       val columnType = columnTypes(i)
       val columnValue = converter.convert(buffer(i))
-      bindColumn(boundStatement, columnName, columnType, columnValue)
+      val codec = {
+        var c = cachedCodecs(i)
+        if (c == null && columnValue != Unset) {
+          c = CodecRegistryUtil.codecFor(codecRegistry, columnType, columnValue)
+          cachedCodecs(i) = c
+        }
+        c
+      }
+      bindColumn(boundStatement, columnName, columnValue, codec)
       val serializedValue = boundStatement.stmt.getBytesUnsafe(i)
       if (serializedValue != null) bytesCount += serializedValue.remaining()
     }
 
     if (hasAutoTimestamp) {
-      boundStatement.setLong(TableWriter.AutoTimestampParam, autoTsCounter.getAndIncrement())
+      boundStatement.update(_.setLong(TableWriter.AutoTimestampParam, autoTsCounter.getAndIncrement()))
     }
 
     boundStatement.bytesCount = bytesCount
