@@ -25,7 +25,7 @@ import com.datastax.spark.connector.util.Logging
 
 import scala.jdk.CollectionConverters._
 import scala.collection.concurrent.TrieMap
-import scala.util.Try
+import scala.util.{Success, Try}
 import AsyncExecutor._
 import com.datastax.oss.driver.api.core.{AllNodesFailedException, NodeUnavailableException, NoNodeAvailableException}
 import com.datastax.oss.driver.api.core.connection.BusyConnectionException
@@ -133,8 +133,12 @@ class AsyncExecutor[T, R](asyncAction: T => CompletionStage[R], maxConcurrentTas
     * It will not wait for tasks scheduled for execution during this method call,
     * nor tasks for which the [[executeAsync]] method did not complete. */
   def waitForCurrentlyExecutingTasks(): Unit = {
-    for ((future, _) <- pendingFutures.snapshot())
-      Try(Await.result(future, Duration.Inf))
+    val snapshot = pendingFutures.snapshot().keys.toSeq
+    if (snapshot.nonEmpty) {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val allSettled = Future.traverse(snapshot)(_.transform(Success(_)))
+      Await.ready(allSettled, Duration.Inf)
+    }
   }
 }
 
