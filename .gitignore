@@ -28,6 +28,8 @@ metastore_db
 bin/
 checkpoint
 
+TODO*.md
+
 # Codex - AI assistant metadata
 .codex/
 .codex-cache/
