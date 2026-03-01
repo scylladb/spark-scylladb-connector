@@ -21,6 +21,7 @@ package com.datastax.spark.connector.writer
 import java.nio.ByteBuffer
 
 import com.datastax.oss.driver.api.core.ConsistencyLevel
+import com.datastax.oss.driver.api.core.`type`.codec.TypeCodec
 import com.datastax.oss.driver.api.core.cql._
 import com.datastax.spark.connector.util.maybeExecutingAs
 import com.datastax.spark.connector.writer.RichStatement.DriverStatement
@@ -47,6 +48,18 @@ private[connector] class RichBoundStatementWrapper(initStatement: BoundStatement
   private var _stmt = initStatement
   var bytesCount = 0
   val rowsCount = 1
+
+  def setToNull(columnName: String): Unit = {
+    _stmt = _stmt.setToNull(columnName)
+  }
+
+  def set[ValueT](columnName: String, value: ValueT, codec: TypeCodec[ValueT]): Unit = {
+    _stmt = _stmt.set(columnName, value, codec)
+  }
+
+  def setLong(name: String, value: Long): Unit = {
+    _stmt = _stmt.setLong(name, value)
+  }
 
   def setConsistencyLevel(consistencyLevel: ConsistencyLevel): RichBoundStatementWrapper = {
     _stmt = _stmt.setConsistencyLevel(consistencyLevel)
