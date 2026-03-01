@@ -311,15 +311,15 @@ case class AsyncStatementWriter[T](
 
   def write(record: T): Unit= {
     groupingBatchBuilderBase.batchRecord(record).foreach{ stmt =>
-      queryExecutor.executeAsync(stmt.executeAs(writeConf.executeAs))
       maybeRateLimit(stmt)
+      queryExecutor.executeAsync(stmt.executeAs(writeConf.executeAs))
     }
   }
 
   override def close(): Unit = {
     for (statement <- groupingBatchBuilderBase.finish()) {
-      queryExecutor.executeAsync(statement.executeAs(writeConf.executeAs))
       maybeRateLimit(statement)
+      queryExecutor.executeAsync(statement.executeAs(writeConf.executeAs))
     }
 
     queryExecutor.waitForCurrentlyExecutingTasks()
