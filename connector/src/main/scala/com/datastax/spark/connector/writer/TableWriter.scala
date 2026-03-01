@@ -180,19 +180,19 @@ class TableWriter[T] private (
     }
   }
 
-  def batchRoutingKey(session: CqlSession)(bs: RichBoundStatementWrapper): Any = {
-    def missingMetadataException = new Supplier[IllegalArgumentException] {
-      override def get(): IllegalArgumentException = new IllegalArgumentException("TokenMap Metadata Missing")
-    }
-
+  def batchRoutingKey(session: CqlSession): RichBoundStatementWrapper => Any = {
     writeConf.batchGroupingKey match {
-      case BatchGroupingKey.None =>  0
+      case BatchGroupingKey.None => (_: RichBoundStatementWrapper) => 0
 
       case BatchGroupingKey.ReplicaSet =>
-        session.getMetadata.getTokenMap.orElseThrow(missingMetadataException)
-          .getReplicas(keyspaceName, QueryUtils.getRoutingKeyOrError(bs.stmt))
+        val tokenMap = session.getMetadata.getTokenMap.orElseThrow(
+          new Supplier[IllegalArgumentException] {
+            override def get(): IllegalArgumentException = new IllegalArgumentException("TokenMap Metadata Missing")
+          })
+        (bs: RichBoundStatementWrapper) => tokenMap.getReplicas(keyspaceName, QueryUtils.getRoutingKeyOrError(bs.stmt))
 
-      case BatchGroupingKey.Partition => QueryUtils.getRoutingKeyOrError(bs.stmt)
+      case BatchGroupingKey.Partition =>
+        (bs: RichBoundStatementWrapper) => QueryUtils.getRoutingKeyOrError(bs.stmt)
     }
   }
 
@@ -243,7 +243,7 @@ class TableWriter[T] private (
         ignoreNulls = writeConf.ignoreNulls)
 
       val batchStmtBuilder = new BatchStatementBuilder(batchType, writeConf.consistencyLevel)
-      val batchKeyGenerator = batchRoutingKey(session) _
+      val batchKeyGenerator = batchRoutingKey(session)
       val batchBuilder = new GroupingBatchBuilderBase(boundStmtBuilder, batchStmtBuilder, batchKeyGenerator,
         writeConf.batchSize, writeConf.batchGroupingBufferSize)
 
