@@ -348,8 +348,8 @@ columname will be used to set the writetime for that row.</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.input.join.inClauseSize</code></td>
-  <td>1</td>
-  <td>Maximum number of clustering key values to batch into a single CQL IN clause during joinWithCassandraTable operations. When greater than 1, consecutive left-side rows that share the same partition key are grouped together and queried with a single SELECT ... WHERE pk = ? AND ck IN (?, ?, ...) statement, reducing the number of round-trips to the database. Set to 1 to disable batching (default behavior).</td>
+  <td>0</td>
+  <td>Controls IN-clause batching for joinWithCassandraTable operations. Set to 0 to disable batching (default). When set to a value greater than 1, consecutive left-side rows sharing the same partition key are grouped and queried with a single SELECT ... WHERE pk = ? AND ck IN (?, ?, ...) statement, reducing round-trips to the database. The value determines the maximum number of clustering key values per IN clause. Only applies when the join includes at least one clustering column.</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.input.metrics</code></td>
