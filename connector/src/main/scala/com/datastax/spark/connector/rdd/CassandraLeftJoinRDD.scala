@@ -19,21 +19,20 @@
 package com.datastax.spark.connector.rdd
 
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.cql.AsyncResultSet
-import com.datastax.oss.driver.internal.core.cql.ResultSets
+import com.datastax.oss.driver.api.core.cql.PreparedStatement
 import com.datastax.spark.connector._
-import com.datastax.spark.connector.util.maybeExecutingAs
 import com.datastax.spark.connector.cql._
 import com.datastax.spark.connector.datasource.JoinHelper
+import com.datastax.spark.connector.datasource.ScanHelper.CqlQueryParts
 import com.datastax.spark.connector.rdd.reader._
 import com.datastax.spark.connector.writer._
-import com.google.common.util.concurrent.{FutureCallback, Futures, SettableFuture}
+import com.google.common.util.concurrent.SettableFuture
 import org.apache.spark.rdd.RDD
 
+import scala.collection.mutable
 import scala.reflect.ClassTag
 import org.apache.spark.metrics.InputMetricsUpdater
 
-import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
 
 /**
@@ -140,28 +139,37 @@ class CassandraLeftJoinRDD[L, R] (
 
   /**
    * Turns this CassandraLeftJoinRDD into a factory for converting other RDD's after being serialized
-   * This method is for streaming operations as it allows us to Serialize a template JoinRDD
-   * and the use that serializable template in the DStream closure. This gives us a fully serializable
-   * leftJoinWithCassandra operation
    */
   private[connector] def applyToRDD(left: RDD[L]): CassandraLeftJoinRDD[L, R] = {
     new CassandraLeftJoinRDD[L, R](
-      left,
-      keyspaceName,
-      tableName,
-      connector,
-      columnNames,
-      joinColumns,
-      where,
-      limit,
-      clusteringOrder,
-      readConf,
-      Some(rowReader),
-      Some(rowWriter)
+      left, keyspaceName, tableName, connector, columnNames, joinColumns,
+      where, limit, clusteringOrder, readConf, Some(rowReader), Some(rowWriter)
     )
   }
 
+  /** Whether IN-clause batching can be applied for this join configuration. */
+  private[rdd] def canBatchJoinQueries: Boolean = {
+    val (_, ckCols) = JoinHelper.splitJoinColumns(tableDef, joinColumnNames)
+    ckCols.nonEmpty && readConf.joinInClauseSize > 1
+  }
+
   private[rdd] def fetchIterator(
+    session: CqlSession,
+    bsb: BoundStatementBuilder[L],
+    rowMetadata: CassandraRowMetadata,
+    leftIterator: Iterator[L],
+    metricsUpdater: InputMetricsUpdater
+  ): Iterator[(L, Option[R])] = {
+
+    if (canBatchJoinQueries) {
+      fetchIteratorWithInClause(session, bsb, rowMetadata, leftIterator, metricsUpdater)
+    } else {
+      fetchIteratorSingle(session, bsb, rowMetadata, leftIterator, metricsUpdater)
+    }
+  }
+
+  /** Original single-row-per-query fetch strategy. */
+  private[rdd] def fetchIteratorSingle(
     session: CqlSession,
     bsb: BoundStatementBuilder[L],
     rowMetadata: CassandraRowMetadata,
@@ -183,8 +191,6 @@ class CassandraLeftJoinRDD[L, R] (
         case Success(rs) =>
           val resultSet = new PrefetchingResultSetIterator(rs)
           val iteratorWithMetrics = resultSet.map(metricsUpdater.updateMetrics)
-          /* This is a much less than ideal place to actually rate limit, we are buffering
-          these futures this means we will most likely exceed our threshold*/
           val throttledIterator = iteratorWithMetrics.map(maybeRateLimit)
           val rightSide = resultSet.isEmpty match {
             case true => Iterator.single(None)
@@ -203,5 +209,130 @@ class CassandraLeftJoinRDD[L, R] (
       pairWithRight(left)
     })
     JoinHelper.slidingPrefetchIterator(queryFutures, readConf.parallelismLevel).flatten
+  }
+
+  /**
+   * IN-clause batching fetch strategy for left joins. Groups consecutive left-side rows
+   * sharing the same partition key and issues a single IN-clause query per group.
+   * Left elements with no matching results produce (left, None) pairs.
+   */
+  private[rdd] def fetchIteratorWithInClause(
+    session: CqlSession,
+    bsb: BoundStatementBuilder[L],
+    rowMetadata: CassandraRowMetadata,
+    leftIterator: Iterator[L],
+    metricsUpdater: InputMetricsUpdater
+  ): Iterator[(L, Option[R])] = {
+
+    import com.datastax.spark.connector.util.Threads.BlockingIOExecutionContext
+
+    val queryExecutor = QueryExecutor(session, readConf.parallelismLevel, None, None, connector.conf)
+    val codecRegistry = session.getContext.getCodecRegistry
+    val ctx = InClauseContext(session)
+
+    def pairSingleWithRight(left: L): SettableFuture[Iterator[(L, Option[R])]] = {
+      val resultFuture = SettableFuture.create[Iterator[(L, Option[R])]]
+      val stmt = bsb.bind(left).update(_.setPageSize(readConf.fetchSizeInRows)).executeAs(readConf.executeAs)
+      queryExecutor.executeAsync(stmt).onComplete {
+        case Success(rs) =>
+          val resultSet = new PrefetchingResultSetIterator(rs)
+          val it = resultSet.map(metricsUpdater.updateMetrics).map(maybeRateLimit)
+          val rightSide = if (resultSet.isEmpty) Iterator.single(None)
+            else it.map(r => Some(rowReader.read(r, rowMetadata)))
+          resultFuture.set(Iterator.continually(left).zip(rightSide))
+        case Failure(t) => resultFuture.setException(t)
+      }
+      resultFuture
+    }
+
+    def pairGroupWithRight(group: Seq[L]): SettableFuture[Iterator[(L, Option[R])]] = {
+      if (group.size == 1) return pairSingleWithRight(group.head)
+      val resultFuture = SettableFuture.create[Iterator[(L, Option[R])]]
+      val preparedStmt = ctx.getOrPrepare(group.size)
+      val ckValueToLefts = ctx.buildCkValueMap(group)
+      val boundStmt = JoinHelper.bindInClauseStatement(
+        group, preparedStmt, rowWriter, codecRegistry,
+        where.values, ctx.pkIndices, ctx.ckEqIndices, ctx.lastCkIndex
+      ).setPageSize(readConf.fetchSizeInRows)
+      val richStmt = new RichBoundStatementWrapper(boundStmt).executeAs(readConf.executeAs)
+      queryExecutor.executeAsync(richStmt).onComplete {
+        case Success(rs) =>
+          val it = new PrefetchingResultSetIterator(rs).map(metricsUpdater.updateMetrics)
+          val throttled = it.map(maybeRateLimit)
+          resultFuture.set(ctx.matchLeftJoinResults(throttled, group, ckValueToLefts, rowMetadata, rowReader))
+        case Failure(t) => resultFuture.setException(t)
+      }
+      resultFuture
+    }
+
+    val groupedIt = JoinHelper.groupConsecutive(leftIterator, readConf.joinInClauseSize, ctx.extractPk)
+    val queryFutures = groupedIt.map { group =>
+      requestsPerSecondRateLimiter.maybeSleep(1)
+      pairGroupWithRight(group)
+    }
+    JoinHelper.slidingPrefetchIterator(queryFutures, readConf.parallelismLevel).flatten
+  }
+
+  /** Encapsulates state needed for IN-clause batching within a partition. */
+  private case class InClauseContext(session: CqlSession) {
+    private val (pkCols, ckCols) = JoinHelper.splitJoinColumns(tableDef, joinColumnNames)
+    private val writerColNames = rowWriter.columnNames
+    private val queryParts = CqlQueryParts(selectedColumnRefs, where, limit, clusteringOrder)
+    private val stmtCache = mutable.Map.empty[Int, PreparedStatement]
+
+    val pkIndices: Seq[Int] = pkCols.map(c => writerColNames.indexOf(c.columnName))
+    val ckEqIndices: Seq[Int] = ckCols.init.map(c => writerColNames.indexOf(c.columnName))
+    val lastCkIndex: Int = writerColNames.indexOf(ckCols.last.columnName)
+    val lastCkColumnName: String = ckCols.last.columnName
+
+    def getOrPrepare(size: Int): PreparedStatement = stmtCache.getOrElseUpdate(size, {
+      val q = JoinHelper.getJoinInQueryString(tableDef, joinColumnNames, queryParts, size)
+      JoinHelper.getJoinPreparedStatement(session, q, consistencyLevel)
+    })
+
+    def extractPk(left: L): Seq[Any] = {
+      val buf = Array.ofDim[Any](writerColNames.size)
+      rowWriter.readColumnValues(left, buf)
+      pkIndices.map(buf(_))
+    }
+
+    def buildCkValueMap(group: Seq[L]): mutable.LinkedHashMap[Any, mutable.ArrayBuffer[L]] = {
+      val map = mutable.LinkedHashMap.empty[Any, mutable.ArrayBuffer[L]]
+      val buf = Array.ofDim[Any](writerColNames.size)
+      for (elem <- group) {
+        rowWriter.readColumnValues(elem, buf)
+        map.getOrElseUpdate(buf(lastCkIndex), mutable.ArrayBuffer.empty) += elem
+      }
+      map
+    }
+
+    /** For left joins: collect results, then emit (left, Some(right)) or (left, None). */
+    def matchLeftJoinResults(
+      rows: Iterator[com.datastax.oss.driver.api.core.cql.Row],
+      group: Seq[L],
+      ckMap: mutable.LinkedHashMap[Any, mutable.ArrayBuffer[L]],
+      rowMeta: CassandraRowMetadata,
+      rReader: reader.RowReader[R]
+    ): Iterator[(L, Option[R])] = {
+      val ckColIdx = rowMeta.indexOfCqlColumnOrThrow(lastCkColumnName)
+      val resultsByCk = mutable.LinkedHashMap.empty[Any, mutable.ArrayBuffer[R]]
+      rows.foreach { row =>
+        val right = rReader.read(row, rowMeta)
+        val ckVal = row.getObject(ckColIdx)
+        resultsByCk.getOrElseUpdate(ckVal, mutable.ArrayBuffer.empty) += right
+      }
+      val buf = Array.ofDim[Any](writerColNames.size)
+      group.iterator.flatMap { left =>
+        rowWriter.readColumnValues(left, buf)
+        val leftCkVal = buf(lastCkIndex)
+        val rights = resultsByCk.get(leftCkVal).orElse(
+          resultsByCk.collectFirst { case (k, v) if JoinHelper.ckValuesMatch(leftCkVal, k) => v }
+        )
+        rights match {
+          case Some(rs) => rs.iterator.map(r => (left, Some(r)))
+          case None => Iterator.single((left, None))
+        }
+      }
+    }
   }
 }

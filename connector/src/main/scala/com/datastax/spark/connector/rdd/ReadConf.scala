@@ -44,7 +44,8 @@ case class ReadConf(
   throughputMiBPS: Option[Double] = None,
   readsPerSec: Option[Int] = ReadConf.ReadsPerSecParam.default,
   parallelismLevel: Int = ReadConf.ParallelismLevelParam.default,
-  executeAs: Option[String] = None)
+  executeAs: Option[String] = None,
+  joinInClauseSize: Int = ReadConf.JoinInClauseSizeParam.default)
 
 
 object ReadConf extends Logging {
@@ -126,6 +127,20 @@ object ReadConf extends Logging {
       """Sets read parallelism for joinWithCassandra tables"""
   )
 
+  val JoinInClauseSizeParam = ConfigParameter[Int] (
+    name = "spark.cassandra.input.join.inClauseSize",
+    section = ReferenceSection,
+    default = 0,
+    description =
+      """Controls IN-clause batching for joinWithCassandraTable operations.
+        | Set to 0 to disable batching (default). When set to a value greater than 1,
+        | consecutive left-side rows sharing the same partition key are grouped and
+        | queried with a single SELECT ... WHERE pk = ? AND ck IN (?, ?, ...) statement,
+        | reducing round-trips to the database. The value determines the maximum number
+        | of clustering key values per IN clause. Only applies when the join includes
+        | at least one clustering column.""".stripMargin.filter(_ >= ' ')
+  )
+
   def fromSparkConf(conf: SparkConf): ReadConf = {
 
     ConfigCheck.checkConfig(conf)
@@ -138,7 +153,8 @@ object ReadConf extends Logging {
       taskMetricsEnabled = conf.getBoolean(TaskMetricParam.name, TaskMetricParam.default),
       throughputMiBPS = conf.getOption(ThroughputMiBPSParam.name).map(_.toDouble),
       readsPerSec = conf.getOption(ReadsPerSecParam.name).map(_.toInt),
-      parallelismLevel = conf.getInt(ParallelismLevelParam.name, ParallelismLevelParam.default)
+      parallelismLevel = conf.getInt(ParallelismLevelParam.name, ParallelismLevelParam.default),
+      joinInClauseSize = conf.getInt(JoinInClauseSizeParam.name, JoinInClauseSizeParam.default)
     )
   }
 

@@ -347,6 +347,11 @@ columname will be used to set the writetime for that row.</td>
   <td>Number of CQL rows fetched per driver request</td>
 </tr>
 <tr>
+  <td><code>spark.cassandra.input.join.inClauseSize</code></td>
+  <td>0</td>
+  <td>Controls IN-clause batching for joinWithCassandraTable operations. Set to 0 to disable batching (default). When set to a value greater than 1, consecutive left-side rows sharing the same partition key are grouped and queried with a single SELECT ... WHERE pk = ? AND ck IN (?, ?, ...) statement, reducing round-trips to the database. The value determines the maximum number of clustering key values per IN clause. Only applies when the join includes at least one clustering column.</td>
+</tr>
+<tr>
   <td><code>spark.cassandra.input.metrics</code></td>
   <td>true</td>
   <td>Sets whether to record connector specific metrics on write</td>
