@@ -28,7 +28,7 @@ private[connector] class BatchStatementBuilder(
 
   /** Converts a sequence of statements into a batch if its size is greater than 1.
     * Sets the routing key and consistency level. */
-  def maybeCreateBatch(stmts: Seq[RichBoundStatementWrapper]): RichStatement = {
+  def maybeCreateBatch(stmts: scala.collection.Seq[RichBoundStatementWrapper]): RichStatement = {
     require(stmts.nonEmpty, "Statements list cannot be empty")
     val stmt = stmts.head
 

@@ -64,12 +64,12 @@ private[connector] class RichBoundStatementWrapper(initStatement: BoundStatement
 private[connector] class RichBatchStatementWrapper(
     batchType: BatchType,
     consistencyLevel: ConsistencyLevel,
-    stmts: Seq[RichBoundStatementWrapper])
+    stmts: scala.collection.Seq[RichBoundStatementWrapper])
   extends RichStatement {
 
-  private var _stmt = BatchStatement.newInstance(batchType, stmts.map(_.stmt):_*).setConsistencyLevel(consistencyLevel)
+  private var _stmt = BatchStatement.newInstance(batchType, stmts.view.map(_.stmt).toSeq:_*).setConsistencyLevel(consistencyLevel)
 
-  override val bytesCount: Int = stmts.map(_.bytesCount).sum
+  override val bytesCount: Int = stmts.view.map(_.bytesCount).sum
 
   override val rowsCount = _stmt.size()
 
