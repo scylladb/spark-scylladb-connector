@@ -96,7 +96,7 @@ object WriteConf {
   val BatchSizeBytesParam = ConfigParameter[Int](
     name = "spark.cassandra.output.batch.size.bytes",
     section = ReferenceSection,
-    default = 1024,
+    default = 16384,
     description = s"""Maximum total size of the batch in bytes. Overridden by
       |${BatchSizeRowsParam.name}
     """.stripMargin)
