@@ -322,9 +322,21 @@ class CassandraTableScanRDD[R] private[connector](
     // Iterator flatMap trick flattens the iterator-of-iterator structure into a single iterator.
     // flatMap on iterator is lazy, therefore a query for the next token range is executed not earlier
     // than all of the rows returned by the previous query have been consumed
+    // Prepare the scan statement once and reuse across all token ranges in this partition.
+    // The CQL template is identical for every range — only bind values differ.
+    val preparedStmt = tokenRanges.headOption.map { firstRange =>
+      val (cql, _) = ScanHelper.tokenRangeToCqlQuery(firstRange, tableDef, queryParts)
+      ScanHelper.prepareScanStatement(scanner.getSession(), cql)
+    }
+
     val rowIterator = tokenRanges.iterator.flatMap { range =>
       try {
-        val scanResult = ScanHelper.fetchTokenRange(scanner, tableDef, queryParts, range, consistencyLevel, fetchSize)
+        val scanResult = preparedStmt match {
+          case Some(ps) =>
+            ScanHelper.fetchTokenRange(scanner, tableDef, queryParts, range, consistencyLevel, fetchSize, ps)
+          case None =>
+            ScanHelper.fetchTokenRange(scanner, tableDef, queryParts, range, consistencyLevel, fetchSize)
+        }
         val iteratorWithMetrics = scanResult.rows.map(metricsUpdater.updateMetrics)
         val result = iteratorWithMetrics.map(rowReader.read(_, scanResult.metadata))
         result

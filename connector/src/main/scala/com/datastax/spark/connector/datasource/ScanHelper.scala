@@ -20,7 +20,7 @@ package com.datastax.spark.connector.datasource
 
 import java.io.IOException
 import com.datastax.oss.driver.api.core.CqlIdentifier._
-import com.datastax.oss.driver.api.core.cql.BoundStatement
+import com.datastax.oss.driver.api.core.cql.{BoundStatement, PreparedStatement}
 import com.datastax.oss.driver.api.core.{ConsistencyLevel, CqlSession}
 import com.datastax.spark.connector.cql.{CassandraConnector, ScanResult, Scanner, TableDef}
 import com.datastax.spark.connector.rdd.CassandraLimit.limitToClause
@@ -100,6 +100,36 @@ object ScanHelper extends Logging {
     scanResult
   }
 
+  /**
+   * Variant of fetchTokenRange that accepts a pre-prepared statement to avoid
+   * re-preparing the same CQL for every token range within a partition.
+   */
+  def fetchTokenRange(
+    scanner: Scanner,
+    tableDef: TableDef,
+    queryParts: CqlQueryParts,
+    range: CqlTokenRange[_, _],
+    consistencyLevel: ConsistencyLevel,
+    fetchSize: Int,
+    preparedStatement: PreparedStatement): ScanResult = {
+
+    val (_, values) = tokenRangeToCqlQuery(range, tableDef, queryParts)
+
+    logDebug(
+      s"Fetching data for range ${range.cql(partitionKeyStr(tableDef))} " +
+        s"with params ${values.mkString("[", ",", "]")}")
+
+    val stmt = bindScanStatement(preparedStatement, values: _*)
+      .setConsistencyLevel(consistencyLevel)
+      .setPageSize(fetchSize)
+      .setRoutingToken(range.range.startNativeToken())
+
+    val scanResult = scanner.scan(stmt)
+    logDebug(s"Row iterator for range ${range.cql(partitionKeyStr(tableDef))} obtained successfully.")
+
+    scanResult
+  }
+
   def partitionKeyStr(tableDef: TableDef) = {
     tableDef.partitionKey.map(_.columnName).map(quote).mkString(", ")
   }
@@ -160,18 +190,45 @@ object ScanHelper extends Logging {
   def prepareScanStatement(session: CqlSession, cql: String, values: Any*): BoundStatement = {
     try {
       val stmt = session.prepare(cql)
-      val converters = stmt.getVariableDefinitions.asScala
+      bindScanStatement(stmt, values: _*)
+    }
+    catch {
+      case t: Throwable =>
+        throw new IOException(s"Exception during preparation of $cql: ${t.getMessage}", t)
+    }
+  }
+
+  /**
+   * Prepare a CQL statement without binding any values.
+   * Use with [[bindScanStatement]] to prepare once and bind per token range.
+   */
+  def prepareScanStatement(session: CqlSession, cql: String): PreparedStatement = {
+    try {
+      session.prepare(cql)
+    }
+    catch {
+      case t: Throwable =>
+        throw new IOException(s"Exception during preparation of $cql: ${t.getMessage}", t)
+    }
+  }
+
+  /**
+   * Bind values to an already-prepared statement.
+   */
+  def bindScanStatement(preparedStatement: PreparedStatement, values: Any*): BoundStatement = {
+    try {
+      val converters = preparedStatement.getVariableDefinitions.asScala
         .map(v => ColumnType.converterToCassandra(v.getType))
         .toArray
       val convertedValues =
         for ((value, converter) <- values zip converters)
           yield converter.convert(value)
-      stmt.bind(convertedValues: _*)
+      preparedStatement.bind(convertedValues: _*)
         .setIdempotent(true)
     }
     catch {
       case t: Throwable =>
-        throw new IOException(s"Exception during preparation of $cql: ${t.getMessage}", t)
+        throw new IOException(s"Exception during binding of prepared statement: ${t.getMessage}", t)
     }
   }
 
