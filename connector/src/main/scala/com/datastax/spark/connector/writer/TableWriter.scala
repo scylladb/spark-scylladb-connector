@@ -231,34 +231,33 @@ class TableWriter[T] private (
   }
 
   private def getAsyncWriterInternal(queryTemplate: String): AsyncStatementWriter[T] = {
-    connector.withSessionDo { session =>
-      val protocolVersion = session.getContext.getProtocolVersion
-      val stmt = prepareStatement(queryTemplate, session)
-      val batchType = if (isCounterUpdate) DefaultBatchType.COUNTER else DefaultBatchType.UNLOGGED
+    val session = connector.openSession()
+    val protocolVersion = session.getContext.getProtocolVersion
+    val stmt = prepareStatement(queryTemplate, session)
+    val batchType = if (isCounterUpdate) DefaultBatchType.COUNTER else DefaultBatchType.UNLOGGED
 
-      val boundStmtBuilder = new BoundStatementBuilder(
-        rowWriter,
-        stmt,
-        protocolVersion = protocolVersion,
-        ignoreNulls = writeConf.ignoreNulls)
+    val boundStmtBuilder = new BoundStatementBuilder(
+      rowWriter,
+      stmt,
+      protocolVersion = protocolVersion,
+      ignoreNulls = writeConf.ignoreNulls)
 
-      val batchStmtBuilder = new BatchStatementBuilder(batchType, writeConf.consistencyLevel)
-      val batchKeyGenerator = batchRoutingKey(session) _
-      val batchBuilder = new GroupingBatchBuilderBase(boundStmtBuilder, batchStmtBuilder, batchKeyGenerator,
-        writeConf.batchSize, writeConf.batchGroupingBufferSize)
+    val batchStmtBuilder = new BatchStatementBuilder(batchType, writeConf.consistencyLevel)
+    val batchKeyGenerator = batchRoutingKey(session) _
+    val batchBuilder = new GroupingBatchBuilderBase(boundStmtBuilder, batchStmtBuilder, batchKeyGenerator,
+      writeConf.batchSize, writeConf.batchGroupingBufferSize)
 
-      val maybeRateLimit: RichStatement => Unit = writeConf.throughputMiBPS match {
-        case Some(throughput) =>
-          val rateLimiter = new RateLimiter(
-            (throughput * 1024 * 1024).toLong,
-            1024 * 1024)
-          (stmt: RichStatement) => rateLimiter.maybeSleep(stmt.bytesCount)
-        case None =>
-          (stmt: RichStatement) => ()
-      }
-
-      AsyncStatementWriter(connector, writeConf, tableDef, stmt, batchBuilder, maybeRateLimit)
+    val maybeRateLimit: RichStatement => Unit = writeConf.throughputMiBPS match {
+      case Some(throughput) =>
+        val rateLimiter = new RateLimiter(
+          (throughput * 1024 * 1024).toLong,
+          1024 * 1024)
+        (stmt: RichStatement) => rateLimiter.maybeSleep(stmt.bytesCount)
+      case None =>
+        (stmt: RichStatement) => ()
     }
+
+    AsyncStatementWriter(connector, session, writeConf, tableDef, stmt, batchBuilder, maybeRateLimit)
   }
 
   private def writeInternal(asyncStatementWriter: AsyncStatementWriter[T], taskContext: TaskContext, data: Iterator[T]): Unit = {
@@ -290,6 +289,7 @@ class TableWriter[T] private (
 
 case class AsyncStatementWriter[T](
   connector: CassandraConnector,
+  session: CqlSession,
   writeConf: WriteConf,
   tableDef: TableDef,
   preparedStatement: PreparedStatement,
@@ -300,8 +300,6 @@ case class AsyncStatementWriter[T](
   extends Closeable
     with Logging {
 
-  //Don't grab a connection or queryExecutor unless we are using this statement writer
-  private lazy val session: CqlSession = connector.openSession()
   private val keyspaceName: String = tableDef.keyspaceName
   private val tableName: String = tableDef.tableName
 
