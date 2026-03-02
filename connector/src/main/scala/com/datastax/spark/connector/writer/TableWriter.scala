@@ -221,7 +221,7 @@ class TableWriter[T] private (
       case _ => List()
     }
 
-  def getAsyncWriter(): AsyncStatementWriter[T] = {
+  private[connector] def getAsyncWriter(): AsyncStatementWriter[T] = {
     if (isCounterUpdate || containsCollectionBehaviors) {
       getAsyncWriterInternal(queryTemplateUsingUpdate)
     }
@@ -305,9 +305,34 @@ case class AsyncStatementWriter[T](
   private val keyspaceName: String = tableDef.keyspaceName
   private val tableName: String = tableDef.tableName
 
-  private lazy val queryExecutor = new QueryExecutor(
-    session, writeConf.parallelismLevel, successHandler, failureHandler,
-    maxRetries = connector.conf.queryRetryMaxRetries)
+  /** Resolved parallelism level and description, computed once lazily. */
+  private lazy val resolvedParallelism: (Int, String) = writeConf.parallelismLevel match {
+    case Some(level) => (level, "configured")
+    case None =>
+      import scala.jdk.CollectionConverters._
+      val localNodes = session.getMetadata.getNodes.asScala.values
+        .count(_.getDistance == com.datastax.oss.driver.api.core.loadbalancing.NodeDistance.LOCAL)
+      val level = math.min(math.max(WriteConf.DefaultMinParallelism.toLong, localNodes.toLong * 2), WriteConf.DefaultMaxParallelism.toLong).toInt
+      (level, s"auto-detected: $localNodes local node(s), " +
+        s"formula min(max(${WriteConf.DefaultMinParallelism}, $localNodes * 2), ${WriteConf.DefaultMaxParallelism})")
+  }
+
+  /** The parallelism level actually used by this writer, resolved lazily.
+    * Visible within the writer package for testing. */
+  private[writer] def getResolvedParallelismLevel: Int = resolvedParallelism._1
+
+  private lazy val queryExecutor = {
+    val (level, source) = resolvedParallelism
+    if (writeConf.parallelismLevel.exists(_ > WriteConf.DefaultMaxParallelism)) {
+      logWarning(s"Configured write parallelism level ($level) exceeds the recommended maximum " +
+        s"(${WriteConf.DefaultMaxParallelism}) for $keyspaceName.$tableName. " +
+        s"Very high values may cause excessive pressure on the cluster.")
+    }
+    logInfo(s"Using write parallelism level: $level ($source) for $keyspaceName.$tableName")
+    new QueryExecutor(
+      session, level, successHandler, failureHandler,
+      maxRetries = connector.conf.queryRetryMaxRetries)
+  }
 
   def write(record: T): Unit= {
     groupingBatchBuilderBase.batchRecord(record).foreach{ stmt =>

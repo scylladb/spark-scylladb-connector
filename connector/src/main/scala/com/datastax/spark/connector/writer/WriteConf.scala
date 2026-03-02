@@ -49,7 +49,7 @@ case class WriteConf(
   consistencyLevel: ConsistencyLevel = WriteConf.ConsistencyLevelParam.default,
   ifNotExists: Boolean = WriteConf.IfNotExistsParam.default,
   ignoreNulls: Boolean = WriteConf.IgnoreNullsParam.default,
-  parallelismLevel: Int = WriteConf.ParallelismLevelParam.default,
+  parallelismLevel: Option[Int] = WriteConf.ParallelismLevelParam.default,
   throughputMiBPS: Option[Double] = WriteConf.ThroughputMiBPSParam.default,
   ttl: TTLOption = TTLOption.defaultValue,
   timestamp: TimestampOption = TimestampOption.defaultValue,
@@ -70,7 +70,20 @@ case class WriteConf(
     Seq(toRegularColDef(ttl, DataTypes.INT), toRegularColDef(timestamp, DataTypes.BIGINT)).flatten
   }
 
+  require(parallelismLevel.forall(_ > 0),
+    s"parallelismLevel must be a positive integer, got ${parallelismLevel.orNull}")
+
   val throttlingEnabled = throughputMiBPS.isDefined
+
+  /** Returns the parallelism level as an `Int`, resolving `None` (auto) to `0`.
+    *
+    * @deprecated Use [[parallelismLevel]] which returns `Option[Int]` to distinguish
+    *             between auto (`None`) and explicit values. This accessor is provided
+    *             for binary compatibility with code that expects `Int`. A return value
+    *             of `0` means auto-detection is enabled.
+    */
+  @deprecated("Use parallelismLevel: Option[Int] instead. 0 means auto.", "4.0.0")
+  def getParallelismLevel: Int = parallelismLevel.getOrElse(0)
 }
 
 
@@ -138,12 +151,15 @@ object WriteConf {
         |this to true will cause all null values to be left as unset rather than bound. For
         |finer control see the CassandraOption class""".stripMargin)
 
-  val ParallelismLevelParam = ConfigParameter[Int] (
+  val ParallelismLevelParam = ConfigParameter[Option[Int]] (
     name = "spark.cassandra.output.concurrent.writes",
     section = ReferenceSection,
-    default = 5,
+    default = None,
     description = """Maximum number of batches executed in parallel by a
-      | single Spark task""".stripMargin)
+      | single Spark task. The default is 'auto' which means the connector
+      | will adjust the number based on the cluster size:
+      | min(max(10, nodesInLocalDC * 2), 50)""".stripMargin,
+    displayDefault = Some("auto"))
 
   val ThroughputMiBPSParam = ConfigParameter[Option[Double]] (
     name = "spark.cassandra.output.throughputMBPerSec",
@@ -197,6 +213,8 @@ object WriteConf {
     val ignoreNulls = conf.getBoolean(IgnoreNullsParam.name, IgnoreNullsParam.default)
 
     val batchSize = {
+      // Note: accepts "0" and leading zeros (e.g., "007") unlike parallelismLevel parser,
+      // because this value feeds into RowsInBatch which has its own validation.
       val Number = "([0-9]+)".r
       batchSizeInRowsStr match {
         case "auto" => BytesInBatch(batchSizeInBytes)
@@ -213,7 +231,17 @@ object WriteConf {
       .map(BatchGroupingKey.apply)
       .getOrElse(BatchLevelParam.default)
 
-    val parallelismLevel = conf.getInt(ParallelismLevelParam.name, ParallelismLevelParam.default)
+    val parallelismLevelStr = conf.get(ParallelismLevelParam.name, "auto")
+    val parallelismLevel: Option[Int] = {
+      val Number = "([1-9][0-9]*)".r
+      parallelismLevelStr match {
+        case "auto" => None
+        case Number(x) => Some(x.toInt)
+        case other =>
+          throw new ConnectorConfigurationException(
+            s"Invalid value of ${ParallelismLevelParam.name}: $other. Positive integer or 'auto' expected")
+      }
+    }
 
     val throughputMiBPS = conf.getOption(ThroughputMiBPSParam.name).map(_.toDouble)
 
@@ -247,6 +275,40 @@ object WriteConf {
       timestamp = timestampOption,
       ignoreNulls = ignoreNulls,
       ifNotExists = ifNotExists)
+  }
+
+  val DefaultMinParallelism = 10
+  val DefaultMaxParallelism = 50
+
+  /** Legacy default parallelism level, used before adaptive auto-detection was introduced. */
+  private val LegacyDefaultParallelism = 5
+
+  /** Returns `None` typed as `Option[Int]`, for Java interoperability.
+    * Avoids raw `None$` / unchecked casts when constructing `WriteConf` from Java. */
+  def noParallelismLevel: Option[Int] = None
+
+  /** Creates a `WriteConf` accepting parallelism level as a plain `Int`.
+    *
+    * @deprecated Use the primary constructor with `parallelismLevel: Option[Int]` instead.
+    *             Pass `None` for auto-detection or `Some(n)` for an explicit value.
+    */
+  @deprecated("Use WriteConf(parallelismLevel = Some(n)) or WriteConf(parallelismLevel = None) instead.", "4.0.0")
+  def withParallelismLevel(
+    batchSize: BatchSize = BatchSize.Automatic,
+    batchGroupingBufferSize: Int = BatchBufferSizeParam.default,
+    batchGroupingKey: BatchGroupingKey = BatchLevelParam.default,
+    consistencyLevel: ConsistencyLevel = ConsistencyLevelParam.default,
+    ifNotExists: Boolean = IfNotExistsParam.default,
+    ignoreNulls: Boolean = IgnoreNullsParam.default,
+    parallelismLevel: Int = LegacyDefaultParallelism,
+    throughputMiBPS: Option[Double] = ThroughputMiBPSParam.default,
+    ttl: TTLOption = TTLOption.defaultValue,
+    timestamp: TimestampOption = TimestampOption.defaultValue,
+    taskMetricsEnabled: Boolean = TaskMetricsParam.default,
+    executeAs: Option[String] = None): WriteConf = {
+    WriteConf(batchSize, batchGroupingBufferSize, batchGroupingKey, consistencyLevel,
+      ifNotExists, ignoreNulls, Some(parallelismLevel), throughputMiBPS, ttl, timestamp,
+      taskMetricsEnabled, executeAs)
   }
 
 }

@@ -27,6 +27,7 @@ import com.datastax.spark.connector.writer.*;
 import org.apache.spark.SparkConf;
 import org.joda.time.DateTime;
 import org.joda.time.Duration;
+import scala.Option;
 import scala.Some$;
 
 import java.io.Serializable;
@@ -269,10 +270,30 @@ public abstract class RDDAndDStreamCommonJavaFunctions<T> {
          * @return this instance or copy to allow method invocation chaining
          */
         public WriterBuilder withParallelismLevel(int parallelismLevel) {
-            if (writeConf.parallelismLevel() != parallelismLevel)
+            if (!Objects.equals(writeConf.parallelismLevel(), Some$.MODULE$.apply(parallelismLevel)))
                 return withWriteConf(
                     new WriteConf(writeConf.batchSize(), writeConf.batchGroupingBufferSize(), writeConf.batchGroupingKey(),
-                        writeConf.consistencyLevel(), writeConf.ifNotExists(), writeConf.ignoreNulls(), parallelismLevel,
+                        writeConf.consistencyLevel(), writeConf.ifNotExists(), writeConf.ignoreNulls(), Some$.MODULE$.apply(parallelismLevel),
+                        writeConf.throughputMiBPS(), writeConf.ttl(), writeConf.timestamp(), writeConf.taskMetricsEnabled(),
+                        writeConf.executeAs()));
+            else
+                return this;
+        }
+
+        /**
+         * Returns a copy of this builder with the parallelism level reset to auto-detection mode.
+         *
+         * <p>In auto mode, the connector will determine the parallelism level based on the cluster size:
+         * {@code min(max(10, nodesInLocalDC * 2), 50)}.</p>
+         *
+         * @return this instance or copy to allow method invocation chaining
+         */
+        public WriterBuilder withAutoParallelismLevel() {
+            Option<Object> none = WriteConf.noParallelismLevel();
+            if (!Objects.equals(writeConf.parallelismLevel(), none))
+                return withWriteConf(
+                    new WriteConf(writeConf.batchSize(), writeConf.batchGroupingBufferSize(), writeConf.batchGroupingKey(),
+                        writeConf.consistencyLevel(), writeConf.ifNotExists(), writeConf.ignoreNulls(), none,
                         writeConf.throughputMiBPS(), writeConf.ttl(), writeConf.timestamp(), writeConf.taskMetricsEnabled(),
                         writeConf.executeAs()));
             else

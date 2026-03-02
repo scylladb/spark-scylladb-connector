@@ -19,6 +19,7 @@
 package com.datastax.spark.connector.writer
 
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel
+import com.datastax.spark.connector.util.ConfigCheck.ConnectorConfigurationException
 import com.datastax.spark.connector.{BytesInBatch, RowsInBatch}
 import org.apache.spark.SparkConf
 import org.scalatest.{FlatSpec, Matchers}
@@ -31,7 +32,7 @@ class WriteConfTest extends FlatSpec with Matchers {
 
     writeConf.batchSize should be (BytesInBatch(WriteConf.BatchSizeBytesParam.default))
     writeConf.consistencyLevel should be (WriteConf.ConsistencyLevelParam.default)
-    writeConf.parallelismLevel should be (WriteConf.ParallelismLevelParam.default)
+    writeConf.parallelismLevel should be (None)
   }
 
   it should "allow setting the rate limit as a decimal" in {
@@ -54,7 +55,31 @@ class WriteConfTest extends FlatSpec with Matchers {
       .set("spark.cassandra.output.concurrent.writes", "17")
     val writeConf = WriteConf.fromSparkConf(conf)
 
-    writeConf.parallelismLevel should be(17)
+    writeConf.parallelismLevel should be(Some(17))
+  }
+
+  it should "set parallelism level to auto by default" in {
+    val conf = new SparkConf(false)
+    val writeConf = WriteConf.fromSparkConf(conf)
+
+    writeConf.parallelismLevel should be(None)
+  }
+
+  it should "set parallelism level to auto when explicitly set to 'auto'" in {
+    val conf = new SparkConf(false)
+      .set("spark.cassandra.output.concurrent.writes", "auto")
+    val writeConf = WriteConf.fromSparkConf(conf)
+
+    writeConf.parallelismLevel should be(None)
+  }
+
+  it should "reject invalid parallelism level value" in {
+    val conf = new SparkConf(false)
+      .set("spark.cassandra.output.concurrent.writes", "invalid")
+
+    intercept[ConnectorConfigurationException] {
+      WriteConf.fromSparkConf(conf)
+    }
   }
 
   it should "allow to set batch size in bytes" in {
@@ -96,5 +121,64 @@ class WriteConfTest extends FlatSpec with Matchers {
     writeConf.batchGroupingBufferSize should be(30000)
   }
 
+  it should "reject parallelism level of 0" in {
+    val conf = new SparkConf(false)
+      .set("spark.cassandra.output.concurrent.writes", "0")
+
+    intercept[ConnectorConfigurationException] {
+      WriteConf.fromSparkConf(conf)
+    }
+  }
+
+  it should "reject parallelism level with leading zeros" in {
+    val conf = new SparkConf(false)
+      .set("spark.cassandra.output.concurrent.writes", "007")
+
+    intercept[ConnectorConfigurationException] {
+      WriteConf.fromSparkConf(conf)
+    }
+  }
+
+  it should "reject negative parallelism level via SparkConf" in {
+    val conf = new SparkConf(false)
+      .set("spark.cassandra.output.concurrent.writes", "-1")
+
+    intercept[ConnectorConfigurationException] {
+      WriteConf.fromSparkConf(conf)
+    }
+  }
+
+  it should "support explicit Some parallelism level (Java API path)" in {
+    val writeConf = WriteConf(parallelismLevel = Some(42))
+    writeConf.parallelismLevel should be(Some(42))
+  }
+
+  it should "support None parallelism level for auto mode (Java API path)" in {
+    val writeConf = WriteConf(parallelismLevel = None)
+    writeConf.parallelismLevel should be(None)
+  }
+
+  it should "reject negative parallelism level via constructor" in {
+    intercept[IllegalArgumentException] {
+      WriteConf(parallelismLevel = Some(-5))
+    }
+  }
+
+  it should "reject zero parallelism level via constructor" in {
+    intercept[IllegalArgumentException] {
+      WriteConf(parallelismLevel = Some(0))
+    }
+  }
+
+  it should "accept parallelism level exceeding recommended maximum without throwing" in {
+    val writeConf = WriteConf(parallelismLevel = Some(100))
+    writeConf.parallelismLevel should be(Some(100))
+    writeConf.parallelismLevel.get should be > WriteConf.DefaultMaxParallelism
+  }
+
+  "auto parallelism constants" should "define a valid range" in {
+    WriteConf.DefaultMinParallelism should be > 0
+    WriteConf.DefaultMaxParallelism should be >= WriteConf.DefaultMinParallelism
+  }
 
 }
