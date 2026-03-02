@@ -333,7 +333,6 @@ case class AsyncStatementWriter[T](
              |Please check the executor logs for more exceptions and information
              """.stripMargin)
     }
-    queryExecutor.waitForCurrentlyExecutingTasks()
     session.close()
   }
 }
