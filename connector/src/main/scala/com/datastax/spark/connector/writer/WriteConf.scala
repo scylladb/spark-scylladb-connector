@@ -104,7 +104,8 @@ object WriteConf {
     description = """Number of rows per single batch. The default is 'auto'
       |which means the connector will adjust the number
       |of rows based on the amount of data
-      |in each row""".stripMargin)
+      |in each row""".stripMargin,
+    displayDefault = Some("auto"))
 
   val BatchSizeBytesParam = ConfigParameter[Int](
     name = "spark.cassandra.output.batch.size.bytes",
