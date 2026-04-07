@@ -85,7 +85,7 @@ case class TupleType(componentTypes: TupleFieldDef*)
   private lazy val valuesSeqConverter = scala.util.Try(TypeConverter.forType[ValuesSeqAdapter]).toOption
 
   def converterToCassandra(componentConverters: IndexedSeq[TypeConverter[_ <: AnyRef]]) = {
-    new TypeConverter[TupleValue] {
+    new NullableTypeConverter[TupleValue] {
 
       override def targetTypeTag = TupleValue.TypeTag
 
