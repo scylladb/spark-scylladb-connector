@@ -27,6 +27,7 @@ import java.time.{LocalDate, LocalTime, ZoneId, ZoneOffset}
 import java.util.{Date, GregorianCalendar, UUID}
 
 import com.datastax.oss.driver.api.core.data.CqlDuration
+import com.datastax.spark.connector.TupleValue
 
 import scala.collection.immutable.{TreeMap, TreeSet}
 import scala.reflect.runtime.universe._
@@ -654,6 +655,15 @@ class TypeConverterTest {
     val chainedConverter2 = SerializationUtils.roundtrip(chainedConverter)
     assertEquals(1, chainedConverter2.convert(1))
     assertEquals(2, chainedConverter2.convert("2"))
+  }
+
+  @Test
+  def testTupleTypeConverterToCassandraHandlesNull(): Unit = {
+    val tupleType = TupleType(
+      TupleFieldDef(0, IntType),
+      TupleFieldDef(1, TextType))
+    val converter = tupleType.converterToCassandra
+    assertNull(converter.convert(null))
   }
 
   @Test
