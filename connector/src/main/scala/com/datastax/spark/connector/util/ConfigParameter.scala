@@ -29,7 +29,8 @@ class ConfigParameter[T] private (
   val name: String,
   val section: String,
   val default: T,
-  val description: String) extends DataFrameOption with Serializable {
+  val description: String,
+  val displayDefault: Option[String] = None) extends DataFrameOption with Serializable {
 
   override val sqlOptionName = name.replaceAll("\\.", "\\_")
 
@@ -93,8 +94,8 @@ object ConfigParameter{
 
   def names: Seq[String] = staticParameters.map(_.name).toSeq
 
-  def apply[T](name: String, section: String, default: T, description: String): ConfigParameter[T] = {
-    val param = new ConfigParameter(name,section,default, description)
+  def apply[T](name: String, section: String, default: T, description: String, displayDefault: Option[String] = None): ConfigParameter[T] = {
+    val param = new ConfigParameter(name, section, default, description, displayDefault)
     staticParameters.add(param)
     param
   }

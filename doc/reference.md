@@ -405,7 +405,7 @@ spark.cassandra.output.batch.size.rows
 </tr>
 <tr>
   <td><code>spark.cassandra.output.batch.size.rows</code></td>
-  <td>None</td>
+  <td>auto</td>
   <td>Number of rows per single batch. The default is 'auto'
 which means the connector will adjust the number
 of rows based on the amount of data
@@ -413,9 +413,11 @@ in each row</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.output.concurrent.writes</code></td>
-  <td>5</td>
+  <td>auto</td>
   <td>Maximum number of batches executed in parallel by a
- single Spark task</td>
+ single Spark task. The default is 'auto' which means the connector
+ will adjust the number based on the cluster size:
+ min(max(10, nodesInLocalDC * 2), 50)</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.output.consistency.level</code></td>

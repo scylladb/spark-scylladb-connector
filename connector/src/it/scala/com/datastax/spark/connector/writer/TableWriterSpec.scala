@@ -29,7 +29,7 @@ import com.datastax.spark.connector.{SomeColumns, _}
 import com.datastax.spark.connector.cql._
 import com.datastax.spark.connector.mapper.DefaultColumnMapper
 import com.datastax.spark.connector.types._
-import org.apache.spark.SparkException
+import org.apache.spark.{SparkConf, SparkException}
 
 case class Address(street: String, city: String, zip: Int)
 case class KV(key: Int, value: String)
@@ -965,6 +965,31 @@ class TableWriterSpec extends SparkCassandraITFlatSpecBase with DefaultCluster {
     setOverwrite.isIdempotent should be (true)
     val mapOverwrite = TableWriter(conn, ks, "collections_mod", SomeColumns("key", "mcol".overwrite), WriteConf.fromSparkConf(sc.getConf))
     mapOverwrite.isIdempotent should be (true)
+  }
+
+  "A TableWriter with auto parallelism" should "write successfully without explicit concurrent.writes setting" in {
+    conn.withSessionDo(_.execute(s"""TRUNCATE $ks.key_value"""))
+    val writeConf = WriteConf.fromSparkConf(new SparkConf(false))
+    writeConf.parallelismLevel should be(None)
+
+    val col = Seq((1, 1L, "value1"), (2, 2L, "value2"), (3, 3L, "value3"))
+    sc.parallelize(col).saveToCassandra(ks, "key_value", SomeColumns("key", "group", "value"), writeConf)
+    verifyKeyValueTable("key_value")
+  }
+
+  it should "resolve auto-detected parallelism through AsyncStatementWriter" in {
+    val writeConf = WriteConf.fromSparkConf(new SparkConf(false))
+    writeConf.parallelismLevel should be(None)
+
+    val writer = TableWriter(conn, ks, "key_value", AllColumns, writeConf)
+    val asyncWriter = writer.getAsyncWriter()
+    try {
+      val resolved = asyncWriter.getResolvedParallelismLevel
+      resolved should be >= WriteConf.DefaultMinParallelism
+      resolved should be <= WriteConf.DefaultMaxParallelism
+    } finally {
+      asyncWriter.close()
+    }
   }
 
 }
