@@ -48,7 +48,10 @@ class GroupingBatchBuilderSpec extends SparkCassandraITFlatSpecBase with Default
       rowWriter,
       stmt,
       protocolVersion = protocolVersion)
-    val batchStmtBuilder = new BatchStatementBuilder(DefaultBatchType.UNLOGGED, DefaultConsistencyLevel.LOCAL_ONE)
+    val batchStmtBuilder = new BatchStatementBuilder(
+      DefaultBatchType.UNLOGGED,
+      DefaultConsistencyLevel.LOCAL_ONE,
+      isIdempotent = true)
     new GroupingBatchBuilder[(Int, String)](
       boundStmtBuilder,
       batchStmtBuilder,
