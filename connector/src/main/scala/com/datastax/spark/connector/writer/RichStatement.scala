@@ -66,6 +66,11 @@ private[connector] class RichBoundStatementWrapper(initStatement: BoundStatement
     this
   }
 
+  def setIdempotent(isIdempotent: Boolean): RichBoundStatementWrapper = {
+    _stmt = _stmt.setIdempotent(isIdempotent)
+    this
+  }
+
   override def stmt: BoundStatement = _stmt
 
   override def executeAs(executeAs: Option[String]): RichStatement = {
@@ -77,10 +82,14 @@ private[connector] class RichBoundStatementWrapper(initStatement: BoundStatement
 private[connector] class RichBatchStatementWrapper(
     batchType: BatchType,
     consistencyLevel: ConsistencyLevel,
+    isIdempotent: Boolean,
     stmts: scala.collection.Seq[RichBoundStatementWrapper])
   extends RichStatement {
 
-  private var _stmt = BatchStatement.newInstance(batchType, stmts.view.map(_.stmt).toSeq:_*).setConsistencyLevel(consistencyLevel)
+  private var _stmt = BatchStatement
+    .newInstance(batchType, stmts.view.map(_.stmt).toSeq:_*)
+    .setConsistencyLevel(consistencyLevel)
+    .setIdempotent(isIdempotent)
 
   override val bytesCount: Int = stmts.view.map(_.bytesCount).sum
 
