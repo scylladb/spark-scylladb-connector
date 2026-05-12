@@ -170,8 +170,6 @@ class TableWriter[T] private (
   private def prepareStatement(queryTemplate:String, session: CqlSession): PreparedStatement = {
     try {
       val stmt = SimpleStatement.newInstance(queryTemplate)
-        .setIdempotent(isIdempotent)
-        .setConsistencyLevel(writeConf.consistencyLevel)
       session.prepare(stmt)
     }
     catch {
@@ -242,7 +240,10 @@ class TableWriter[T] private (
         protocolVersion = protocolVersion,
         ignoreNulls = writeConf.ignoreNulls)
 
-      val batchStmtBuilder = new BatchStatementBuilder(batchType, writeConf.consistencyLevel)
+      val batchStmtBuilder = new BatchStatementBuilder(
+        batchType,
+        writeConf.consistencyLevel,
+        isIdempotent)
       val batchKeyGenerator = batchRoutingKey(session)
       val batchBuilder = new GroupingBatchBuilderBase(boundStmtBuilder, batchStmtBuilder, batchKeyGenerator,
         writeConf.batchSize, writeConf.batchGroupingBufferSize)
