@@ -413,7 +413,7 @@ in each row</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.output.concurrent.writes</code></td>
-  <td>5</td>
+  <td>10</td>
   <td>Maximum number of batches executed in parallel by a
  single Spark task</td>
 </tr>
