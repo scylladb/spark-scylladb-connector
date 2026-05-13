@@ -21,9 +21,11 @@ package com.datastax.spark.connector.writer
 import com.datastax.oss.driver.api.core.`type`.DataType
 import com.datastax.oss.driver.api.core.`type`.codec.TypeCodec
 import com.datastax.oss.driver.api.core.cql.{BoundStatement, PreparedStatement}
-import com.datastax.oss.driver.api.core.{DefaultProtocolVersion, ProtocolVersion}
+import com.datastax.oss.driver.api.core.{CqlIdentifier, DefaultProtocolVersion, ProtocolVersion}
 import com.datastax.spark.connector.types.{ColumnType, Unset}
 import com.datastax.spark.connector.util.{CodecRegistryUtil, Logging}
+
+import scala.jdk.CollectionConverters._
 
 /**
  * Class for binding row-like objects into prepared statements. prefixVals
@@ -39,10 +41,26 @@ private[connector] class BoundStatementBuilder[T](
     val autoTimestampParam: Option[String] = None) extends Logging {
 
   private val columnNames = rowWriter.columnNames.toIndexedSeq
-  private val columnTypes = columnNames.map(preparedStmt.getVariableDefinitions.get(_).getType)
-  private val converters = columnTypes.map(ColumnType.converterToCassandra(_))
+  private val variableDefinitions = preparedStmt.getVariableDefinitions
+
+  /** Precomputed variable indices for each column in the prepared statement.
+    * A column name can occur more than once when a real column is also used as
+    * a per-row TTL/TIMESTAMP placeholder; bind every occurrence by index so
+    * each marker uses its own CQL type and is included in size accounting.
+    * Prefix values are bound positionally by preparedStmt.bind and must not be
+    * overwritten when their marker names collide with row-bound marker names. */
+  private def variableIndicesFor(name: String): Array[Int] = {
+    val exactIndices = variableDefinitions.allIndicesOf(CqlIdentifier.fromInternal(name)).asScala
+    val indices = if (exactIndices.nonEmpty) exactIndices else variableDefinitions.allIndicesOf(name).asScala
+    indices.map(_.toInt).filter(_ >= prefixVals.size).toArray
+  }
+
+  private val varIndices: Array[Array[Int]] = columnNames.map(variableIndicesFor).toArray
+  private val inStatement: Array[Boolean] = varIndices.map(_.nonEmpty)
+  private val columnTypes = varIndices.map(_.map(index => variableDefinitions.get(index).getType))
+  private val converters = columnTypes.map(_.map(ColumnType.converterToCassandra(_)))
   private val buffer = Array.ofDim[Any](columnNames.size)
-  private val cachedCodecs = new Array[TypeCodec[AnyRef]](columnNames.size)
+  private val cachedCodecs = columnTypes.map(types => new Array[TypeCodec[AnyRef]](types.length))
 
   /** Internal auto-timestamp placeholder to bind, if this statement was generated with one. */
   private val autoTimestampVariable: Option[String] =
@@ -80,28 +98,28 @@ private[connector] class BoundStatementBuilder[T](
 
   private def bindColumnNull(
     boundStatement: RichBoundStatementWrapper,
-    columnName: String,
+    variableIndex: Int,
     columnValue: AnyRef,
     codec: TypeCodec[AnyRef]): Unit = {
 
     if (columnValue == Unset || (ignoreNulls && columnValue == null)) {
-      boundStatement.update(s => s.setToNull(columnName))
+      boundStatement.update(s => s.setToNull(variableIndex))
       logUnsetToNullWarning = true
     } else {
-      boundStatement.update(s => s.set(columnName, columnValue, codec))
+      boundStatement.update(s => s.set(variableIndex, columnValue, codec))
     }
   }
 
   private def bindColumnUnset(
     boundStatement: RichBoundStatementWrapper,
-    columnName: String,
+    variableIndex: Int,
     columnValue: AnyRef,
     codec: TypeCodec[AnyRef]): Unit = {
 
     if (columnValue == Unset || (ignoreNulls && columnValue == null)) {
       //Do not bind
     } else {
-      boundStatement.update(s => s.set(columnName, columnValue, codec))
+      boundStatement.update(s => s.set(variableIndex, columnValue, codec))
     }
   }
 
@@ -110,7 +128,7 @@ private[connector] class BoundStatementBuilder[T](
   * we can leave values in the prepared statement unset. If the version is
   * less than V3 then we need to place a `null` in the bound statement.
   */
-  val bindColumn: (RichBoundStatementWrapper, String, AnyRef, TypeCodec[AnyRef]) => Unit = protocolVersion match {
+  val bindColumn: (RichBoundStatementWrapper, Int, AnyRef, TypeCodec[AnyRef]) => Unit = protocolVersion match {
     case pv if pv.getCode() <= DefaultProtocolVersion.V3.getCode => bindColumnNull
     case _ => bindColumnUnset
   }
@@ -130,22 +148,24 @@ private[connector] class BoundStatementBuilder[T](
     rowWriter.readColumnValues(row, buffer)
     val codecRegistry = boundStatement.stmt.codecRegistry()
     var bytesCount = 0
-    for (i <- columnNames.indices) {
-      val converter = converters(i)
-      val columnName = columnNames(i)
-      val columnType = columnTypes(i)
-      val columnValue = converter.convert(buffer(i))
-      val codec = {
-        var c = cachedCodecs(i)
-        if (c == null && columnValue != Unset) {
-          c = CodecRegistryUtil.codecFor(codecRegistry, columnType, columnValue)
-          cachedCodecs(i) = c
+    for (i <- columnNames.indices if inStatement(i)) {
+      for (j <- varIndices(i).indices) {
+        val converter = converters(i)(j)
+        val variableIndex = varIndices(i)(j)
+        val columnType = columnTypes(i)(j)
+        val columnValue = converter.convert(buffer(i))
+        val codec = {
+          var c = cachedCodecs(i)(j)
+          if (c == null && columnValue != Unset) {
+            c = CodecRegistryUtil.codecFor(codecRegistry, columnType, columnValue)
+            cachedCodecs(i)(j) = c
+          }
+          c
         }
-        c
+        bindColumn(boundStatement, variableIndex, columnValue, codec)
+        val serializedValue = boundStatement.stmt.getBytesUnsafe(variableIndex)
+        if (serializedValue != null) bytesCount += serializedValue.remaining()
       }
-      bindColumn(boundStatement, columnName, columnValue, codec)
-      val serializedValue = boundStatement.stmt.getBytesUnsafe(i)
-      if (serializedValue != null) bytesCount += serializedValue.remaining()
     }
 
     autoTimestampVariable.foreach { param =>
