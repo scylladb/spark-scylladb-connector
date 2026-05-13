@@ -398,7 +398,7 @@ memory before sending to Cassandra</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.output.batch.size.bytes</code></td>
-  <td>1024</td>
+  <td>16384</td>
   <td>Maximum total size of the batch in bytes. Overridden by
 spark.cassandra.output.batch.size.rows
     </td>
