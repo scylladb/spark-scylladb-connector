@@ -35,7 +35,8 @@ private[connector] class BoundStatementBuilder[T](
     val preparedStmt: PreparedStatement,
     val prefixVals: Seq[Any] = Seq.empty,
     val ignoreNulls: Boolean = false,
-    val protocolVersion: ProtocolVersion) extends Logging {
+    val protocolVersion: ProtocolVersion,
+    val autoTimestampParam: Option[String] = None) extends Logging {
 
   private val columnNames = rowWriter.columnNames.toIndexedSeq
   private val columnTypes = columnNames.map(preparedStmt.getVariableDefinitions.get(_).getType)
@@ -43,12 +44,9 @@ private[connector] class BoundStatementBuilder[T](
   private val buffer = Array.ofDim[Any](columnNames.size)
   private val cachedCodecs = new Array[TypeCodec[AnyRef]](columnNames.size)
 
-  /** Whether the prepared statement contains an auto-timestamp placeholder that
-    * needs to be bound with a unique, incrementing microsecond timestamp per row. */
-  private val hasAutoTimestamp: Boolean = {
-    val varDefs = preparedStmt.getVariableDefinitions
-    (0 until varDefs.size()).exists(i => varDefs.get(i).getName.asInternal() == TableWriter.AutoTimestampParam)
-  }
+  /** Internal auto-timestamp placeholder to bind, if this statement was generated with one. */
+  private val autoTimestampVariable: Option[String] =
+    autoTimestampParam.filter(preparedStmt.getVariableDefinitions.contains)
 
   /** Monotonically incrementing microsecond counter for auto-timestamps.
     * Uses a global counter to guarantee uniqueness across all concurrent
@@ -150,8 +148,9 @@ private[connector] class BoundStatementBuilder[T](
       if (serializedValue != null) bytesCount += serializedValue.remaining()
     }
 
-    if (hasAutoTimestamp) {
-      boundStatement.update(_.setLong(TableWriter.AutoTimestampParam, autoTsCounter.getAndIncrement()))
+    autoTimestampVariable.foreach { param =>
+      boundStatement.update(_.setLong(param, autoTsCounter.getAndIncrement()))
+      bytesCount += 8 // Long = 8 bytes, not counted in the column loop above
     }
 
     boundStatement.bytesCount = bytesCount
