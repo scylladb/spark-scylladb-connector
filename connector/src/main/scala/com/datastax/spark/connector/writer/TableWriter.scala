@@ -501,10 +501,19 @@ object TableWriter {
        tokenRangeAcc: Option[TokenRangeAccumulator]): TableWriter[T] = {
 
     val optionColumns = writeConf.optionsAsColumns(tableDef.keyspaceName, tableDef.tableName)
+    val tableHasCounterColumns = tableDef.columns.exists(_.isCounterColumn)
     val tablDefWithMeta = tableDef.copy(regularColumns = tableDef.regularColumns ++ optionColumns)
 
+    val tableDefForSelection = if (tableHasCounterColumns && columnNames == AllColumns) {
+      // Counter UPDATE statements do not support TTL or TIMESTAMP, so per-row
+      // placeholders must not be required unless the caller selected them explicitly.
+      tableDef
+    } else {
+      tablDefWithMeta
+    }
+
     val selectedColumns = columnNames
-      .selectFrom(tablDefWithMeta)
+      .selectFrom(tableDefForSelection)
       .filter(col => !InternalColumns.contains(col.columnName))
     val rowWriter = implicitly[RowWriterFactory[T]].rowWriter(tablDefWithMeta, selectedColumns)
 
