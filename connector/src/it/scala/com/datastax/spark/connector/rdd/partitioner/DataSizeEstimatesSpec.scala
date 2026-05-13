@@ -29,6 +29,7 @@ class DataSizeEstimatesSpec extends SparkCassandraITFlatSpecBase with DefaultClu
   override lazy val conn = CassandraConnector(defaultConf)
 
   val tableName = "table1"
+  val rowCount = 1000
 
   override def beforeClass: Unit = {
     conn.withSessionDo { session => createKeyspace(session) }
@@ -39,7 +40,7 @@ class DataSizeEstimatesSpec extends SparkCassandraITFlatSpecBase with DefaultClu
       session.execute(s"CREATE TABLE $ks.$tableName(key int PRIMARY KEY, value VARCHAR)")
       val ps = session.prepare(s"INSERT INTO $ks.$tableName(key, value) VALUES (?, ?)")
       awaitAll(
-        for (i <- 1 to 1000) yield
+        for (i <- 1 to rowCount) yield
           executor.executeAsync(ps.bind(i.asInstanceOf[AnyRef], "value" + i))
       )
       executor.waitForCurrentlyExecutingTasks()
@@ -50,8 +51,8 @@ class DataSizeEstimatesSpec extends SparkCassandraITFlatSpecBase with DefaultClu
 
   "DataSizeEstimates" should "fetch data size estimates for a known table" in {
     val estimates = new DataSizeEstimates[Long, LongToken](conn, ks, tableName)
-    estimates.partitionCount should be > 500L
-    estimates.partitionCount should be < 2000L
+    estimates.partitionCount should be > (rowCount / 2L)
+    estimates.partitionCount should be <= (rowCount * 2L)
     estimates.dataSizeInBytes should be > 0L
   }
 
