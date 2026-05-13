@@ -36,6 +36,9 @@ import scala.collection.mutable
 
 object JoinHelper extends Logging {
 
+  private def bindMarker(columnName: String): String =
+    s":${CqlIdentifier.fromInternal(columnName).asCql(true)}"
+
   /**
    * Determines which join columns are partition key columns and which are clustering columns.
    * Returns (partitionKeyJoinColumns, clusteringJoinColumns) in table definition order.
@@ -77,11 +80,11 @@ object JoinHelper extends Logging {
 
     // Partition key columns use = :name
     val pkWhere = pkCols.map(c =>
-      s"${CqlIdentifier.fromInternal(c.columnName).asCql(true)} = :${c.columnName}")
+      s"${CqlIdentifier.fromInternal(c.columnName).asCql(true)} = ${bindMarker(c.columnName)}")
 
     // All clustering columns except the last use = :name
     val ckEqWhere = ckCols.init.map(c =>
-      s"${CqlIdentifier.fromInternal(c.columnName).asCql(true)} = :${c.columnName}")
+      s"${CqlIdentifier.fromInternal(c.columnName).asCql(true)} = ${bindMarker(c.columnName)}")
 
     // Last clustering column uses IN (?, ?, ...)
     val lastCk = ckCols.last
@@ -144,7 +147,9 @@ object JoinHelper extends Logging {
     logDebug("Generating Single Key Query Prepared Statement String")
     logDebug(s"SelectedColumns : ${queryParts.selectedColumnRefs} -- JoinColumnNames : $joinColumnNames")
     val columns = queryParts.selectedColumnRefs.map(_.cql).mkString(", ")
-    val joinWhere = joinColumnNames.map(name => s"${CqlIdentifier.fromInternal(name).asCql(true)} = :$name")
+    val joinWhere = joinColumnNames.map { name =>
+      s"${CqlIdentifier.fromInternal(name).asCql(true)} = ${bindMarker(name)}"
+    }
     val limitClause = CassandraLimit.limitToClause(queryParts.limitClause)
     val orderBy = queryParts.clusteringOrder.map(_.toCql(tableDef)).getOrElse("")
     val filter = (queryParts.whereClause.predicates ++ joinWhere).mkString(" AND ")
@@ -301,4 +306,3 @@ object JoinHelper extends Logging {
   }
 
 }
-
