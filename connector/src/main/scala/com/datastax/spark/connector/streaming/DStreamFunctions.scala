@@ -25,7 +25,7 @@ import com.datastax.spark.connector.rdd.ValidRDDType
 import com.datastax.spark.connector.rdd.reader.RowReaderFactory
 import com.datastax.spark.connector.util.Logging
 import com.datastax.spark.connector.writer._
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.streaming.Duration
 import org.apache.spark.streaming.dstream.DStream
 
@@ -88,13 +88,9 @@ class DStreamFunctions[T](dstream: DStream[T])
     connector: CassandraConnector = CassandraConnector(sparkContext),
     rwf: RowWriterFactory[T]): Unit = {
 
-    // column delete require full primary key, partition key is enough otherwise
-    val columnDelete = deleteColumns match {
-      case c :SomeColumns => c.columns.nonEmpty
-      case _  => false
-    }
-    val writer = TableWriter(connector, keyspaceName, tableName, keyColumns, writeConf, !columnDelete)
-    dstream.foreachRDD(rdd => rdd.sparkContext.runJob(rdd, writer.delete(deleteColumns) _))
+    val writer = TableWriter.forDelete(connector, keyspaceName, tableName, deleteColumns, keyColumns, writeConf)
+    val deleteFunc: (TaskContext, Iterator[T]) => Unit = writer.deleteRows _
+    dstream.foreachRDD(rdd => rdd.sparkContext.runJob(rdd, deleteFunc))
   }
 
   /**

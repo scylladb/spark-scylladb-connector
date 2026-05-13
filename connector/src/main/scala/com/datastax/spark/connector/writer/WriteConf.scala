@@ -56,11 +56,14 @@ case class WriteConf(
   taskMetricsEnabled: Boolean = WriteConf.TaskMetricsParam.default,
   executeAs: Option[String] = None) {
 
-  private[writer] val optionPlaceholders: Seq[String] = Seq(ttl, timestamp).collect {
+  private[connector] val optionPlaceholders: Seq[String] = Seq(ttl, timestamp).collect {
     case WriteOption(PerRowWriteOptionValue(placeholder)) => placeholder
   }
 
-  private[writer] val optionsAsColumns: (String, String) => Seq[ColumnDef] = { (keyspace, table) =>
+  require(optionPlaceholders.distinct.size == optionPlaceholders.size,
+    s"TTL and timestamp per-row placeholders must have different names, got: ${optionPlaceholders.mkString(", ")}")
+
+  private[connector] val optionsAsColumns: (String, String) => Seq[ColumnDef] = { (_, _) =>
     def toRegularColDef(opt: WriteOption[_], dataType: DataType) = opt match {
       case WriteOption(PerRowWriteOptionValue(placeholder)) =>
         Some(ColumnDef(placeholder, RegularColumn, ColumnType.fromDriverType(dataType)))
@@ -68,6 +71,27 @@ case class WriteConf(
     }
 
     Seq(toRegularColDef(ttl, DataTypes.INT), toRegularColDef(timestamp, DataTypes.BIGINT)).flatten
+  }
+
+  /** Returns a copy suitable for DELETE operations.
+    * Strips ifNotExists (INSERT-only), ignoreNulls (DELETE only binds
+    * primary key columns which are always non-null, making the flag
+    * meaningless), and static TTL (CQL DELETE does not support TTL;
+    * keeping a static value would be misleading since the DELETE template
+    * never emits it). Per-row TTL is kept so that the option-placeholder
+    * column remains in the table definition for positional alignment with
+    * tuple-based RDDs. The DELETE query template simply omits TTL from the
+    * generated CQL. */
+  private[connector] def forDelete: WriteConf = {
+    val deleteTtl = ttl match {
+      case TTLOption(StaticWriteOptionValue(_)) => TTLOption.defaultValue
+      case other => other
+    }
+    copy(
+      ifNotExists = false,
+      ignoreNulls = false,
+      ttl = deleteTtl
+    )
   }
 
   val throttlingEnabled = throughputMiBPS.isDefined

@@ -19,7 +19,7 @@
 package com.datastax.spark.connector.writer
 
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel
-import com.datastax.spark.connector.{BytesInBatch, RowsInBatch}
+import com.datastax.spark.connector.{BytesInBatch, PrimaryKeyColumns, RowsInBatch, SomeColumns}
 import org.apache.spark.SparkConf
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -96,5 +96,52 @@ class WriteConfTest extends FlatSpec with Matchers {
     writeConf.batchGroupingBufferSize should be(30000)
   }
 
+  it should "keep TTL option placeholder in forDelete config for positional alignment" in {
+    val conf = WriteConf(ttl = TTLOption.perRow("_ttl")).forDelete
+    // TTL is kept in the delete config so option-placeholder columns remain available
+    // for positional alignment in tuple-based RDDs. The DELETE template omits TTL.
+    conf.optionPlaceholders should contain("_ttl")
+  }
+
+  it should "keep per-row TTL and timestamp in forDelete config" in {
+    val wc = WriteConf(
+      ttl = TTLOption.perRow("_ttl"),
+      timestamp = TimestampOption.perRow("_ts"))
+    val conf = wc.forDelete
+    // TTL and timestamp are kept so that the RowWriter preserves tuple-positional mapping
+    conf.ttl should be(TTLOption.perRow("_ttl"))
+    conf.timestamp should be(TimestampOption.perRow("_ts"))
+  }
+
+  it should "strip ifNotExists and ignoreNulls in forDelete" in {
+    val conf = WriteConf(ifNotExists = true, ignoreNulls = true).forDelete
+    conf.ifNotExists should be(false)
+    conf.ignoreNulls should be(false)
+  }
+
+  it should "strip static TTL in forDelete but preserve per-row TTL" in {
+    val staticConf = WriteConf(ttl = TTLOption.constant(100)).forDelete
+    staticConf.ttl should be(TTLOption.defaultValue)
+
+    val perRowConf = WriteConf(ttl = TTLOption.perRow("_ttl")).forDelete
+    perRowConf.ttl should be(TTLOption.perRow("_ttl"))
+  }
+
+  it should "reject duplicate per-row placeholder names for TTL and timestamp" in {
+    val ex = intercept[IllegalArgumentException] {
+      WriteConf(ttl = TTLOption.perRow("x"), timestamp = TimestampOption.perRow("x"))
+    }
+    ex.getMessage should include("different names")
+  }
+
+  it should "keep the legacy optionsAsColumns function accessor" in {
+    val method = classOf[WriteConf].getMethod("optionsAsColumns")
+    method.getReturnType.getName should be("scala.Function2")
+
+    val optionsAsColumns = method.invoke(WriteConf(ttl = TTLOption.perRow("ttl_col")))
+      .asInstanceOf[(String, String) => Seq[com.datastax.spark.connector.cql.ColumnDef]]
+
+    optionsAsColumns("ks", "tbl").map(_.columnName) should contain("ttl_col")
+  }
 
 }

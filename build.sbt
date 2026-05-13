@@ -62,6 +62,8 @@ lazy val commonSettings = Seq(
   dependencyUpdatesFailBuild := true,
   dependencyUpdatesFilter -= moduleFilter(organization = "org.scala-lang"),
   fork := true,
+  Test / javaOptions += "-Dnet.bytebuddy.experimental=true",
+  IntegrationTest / javaOptions += "-Dnet.bytebuddy.experimental=true",
   parallelExecution := true,
   testForkedParallel := false,
   testOptions += Tests.Argument(TestFrameworks.JUnit, "-v"),
