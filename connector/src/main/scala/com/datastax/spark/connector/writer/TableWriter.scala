@@ -132,7 +132,9 @@ class TableWriter[T] private (
       writeConf.timestamp match {
         case TimestampOption(PerRowWriteOptionValue(placeholder)) => s" USING TIMESTAMP :$placeholder"
         case TimestampOption(StaticWriteOptionValue(value)) => s" USING TIMESTAMP $value"
-        case _ => s" USING TIMESTAMP :${TableWriter.AutoTimestampParam}"
+        case _ =>
+          TableWriter.checkAutoTimestampCollisions(columnNames, writeConf)
+          s" USING TIMESTAMP :${TableWriter.AutoTimestampParam}"
       }
     }
 
@@ -144,6 +146,9 @@ class TableWriter[T] private (
 
   private val containsCollectionBehaviors =
     columnSelector.exists(_.isInstanceOf[CollectionColumnName])
+
+  private lazy val usesAutoTimestampForUpdate: Boolean =
+    !isCounterUpdate && writeConf.timestamp == TimestampOption.defaultValue
 
   private[connector] val isIdempotent: Boolean = {
     //All counter operations are not Idempotent
@@ -221,14 +226,18 @@ class TableWriter[T] private (
 
   def getAsyncWriter(): AsyncStatementWriter[T] = {
     if (isCounterUpdate || containsCollectionBehaviors) {
-      getAsyncWriterInternal(queryTemplateUsingUpdate)
+      getAsyncWriterInternal(
+        queryTemplateUsingUpdate,
+        autoTimestampParam = if (usesAutoTimestampForUpdate) Some(TableWriter.AutoTimestampParam) else None)
     }
     else {
       getAsyncWriterInternal(queryTemplateUsingInsert)
     }
   }
 
-  private def getAsyncWriterInternal(queryTemplate: String): AsyncStatementWriter[T] = {
+  private def getAsyncWriterInternal(
+      queryTemplate: String,
+      autoTimestampParam: Option[String] = None): AsyncStatementWriter[T] = {
     connector.withSessionDo { session =>
       val protocolVersion = session.getContext.getProtocolVersion
       val stmt = prepareStatement(queryTemplate, session)
@@ -238,7 +247,8 @@ class TableWriter[T] private (
         rowWriter,
         stmt,
         protocolVersion = protocolVersion,
-        ignoreNulls = writeConf.ignoreNulls)
+        ignoreNulls = writeConf.ignoreNulls,
+        autoTimestampParam = autoTimestampParam)
 
       val batchStmtBuilder = new BatchStatementBuilder(
         batchType,
@@ -341,7 +351,17 @@ case class AsyncStatementWriter[T](
 object TableWriter {
 
   /** Name of the auto-generated timestamp bind parameter added to UPDATE statements. */
-  private[writer] val AutoTimestampParam = "autots"
+  private[writer] val AutoTimestampParam = "connector_autots"
+
+  private[writer] def checkAutoTimestampCollisions(columnNames: Seq[String], writeConf: WriteConf): Unit = {
+    if (columnNames.contains(AutoTimestampParam))
+      throw new IllegalArgumentException(
+        s"Selected column '$AutoTimestampParam' conflicts with internal auto-timestamp parameter. " +
+        "Rename the column or use an explicit timestamp via WriteConf.")
+    if (writeConf.optionPlaceholders.contains(AutoTimestampParam))
+      throw new IllegalArgumentException(
+        s"Per-row placeholder name '$AutoTimestampParam' conflicts with internal auto-timestamp parameter.")
+  }
 
   private def checkMissingColumns(table: TableDef, columnNames: Seq[String]): Unit = {
     val allColumnNames = table.columns.map(_.columnName)
