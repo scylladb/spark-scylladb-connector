@@ -524,10 +524,12 @@ interpreted as Primary Key Constraints.
 `keyColumns: ColumnSelector`  optional parameter allows to manually specify key columns. That allows omitting
 some or all cluster keys for range deletes.
 
-`deleteColumns` and `keyColumns` could not be specified togather as Cassandra does not support range deletes of specific columns
+`deleteColumns` and `keyColumns` can be specified together when `keyColumns` identifies the full primary key needed
+for the requested delete. Range deletes of non-static columns are not supported by Cassandra.
 
-`deleteFromCassandra` uses the same WriteConf and configuration options as `saveToCassandra`,
- for example the timestamp can be passed as WriteConf parameter to delete only records older then the timestamp
+`deleteFromCassandra` uses the same WriteConf execution settings as `saveToCassandra`; for example, the timestamp
+can be passed as a WriteConf parameter to delete only records older than the timestamp. Cassandra does not support
+TTL or `IF NOT EXISTS` on deletes, so those write options are ignored for delete statements.
 
 #### Example Deleting All Rows in a Table Based on a Condition
 

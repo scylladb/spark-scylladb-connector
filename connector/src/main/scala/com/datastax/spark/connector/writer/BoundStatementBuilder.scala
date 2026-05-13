@@ -44,6 +44,7 @@ private[connector] class BoundStatementBuilder[T](
   private val variableDefinitions = preparedStmt.getVariableDefinitions
 
   /** Precomputed variable indices for each column in the prepared statement.
+    * Empty for columns not present in the row-bound part of the statement (option placeholders).
     * A column name can occur more than once when a real column is also used as
     * a per-row TTL/TIMESTAMP placeholder; bind every occurrence by index so
     * each marker uses its own CQL type and is included in size accounting.
@@ -63,8 +64,10 @@ private[connector] class BoundStatementBuilder[T](
   private val cachedCodecs = columnTypes.map(types => new Array[TypeCodec[AnyRef]](types.length))
 
   /** Internal auto-timestamp placeholder to bind, if this statement was generated with one. */
-  private val autoTimestampVariable: Option[String] =
-    autoTimestampParam.filter(preparedStmt.getVariableDefinitions.contains)
+  private val autoTimestampIndices: Array[Int] =
+    autoTimestampParam
+      .map(variableIndicesFor)
+      .getOrElse(Array.emptyIntArray)
 
   /** Monotonically incrementing microsecond counter for auto-timestamps.
     * Uses a global counter to guarantee uniqueness across all concurrent
@@ -168,8 +171,8 @@ private[connector] class BoundStatementBuilder[T](
       }
     }
 
-    autoTimestampVariable.foreach { param =>
-      boundStatement.update(_.setLong(param, autoTsCounter.getAndIncrement()))
+    autoTimestampIndices.foreach { index =>
+      boundStatement.update(_.setLong(index, autoTsCounter.getAndIncrement()))
       bytesCount += 8 // Long = 8 bytes, not counted in the column loop above
     }
 
@@ -184,7 +187,16 @@ private[connector] object BoundStatementBuilder {
     * BoundStatementBuilder instances in the JVM. Ensures that every bound
     * statement gets a unique timestamp even when multiple Spark tasks bind
     * concurrently. Initialized to the current wall-clock time in microseconds
-    * so that timestamps stay in the same ballpark as server-assigned ones. */
+    * so that timestamps stay in the same ballpark as server-assigned ones.
+    *
+    * Known limitations:
+    * - JVM restart (OOM, preemption, speculative execution) may initialize
+    *   a new counter below the previous JVM's last used value. This is
+    *   acceptable because the auto-timestamp only needs to order mutations
+    *   within a single batch to avoid list-mutation deduplication (issue #26);
+    *   cross-JVM ordering relies on CQL last-write-wins semantics.
+    * - Overflow is not a practical concern: at ~1.7e15 microseconds since
+    *   epoch, Long.MaxValue (~9.2e18) provides ~584 years of headroom. */
   private[writer] val globalAutoTsCounter =
     new java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis() * 1000)
 

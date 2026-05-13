@@ -25,6 +25,7 @@ import com.datastax.spark.connector._
 import com.datastax.spark.connector.cluster.DefaultCluster
 import com.datastax.spark.connector.cql.CassandraConnector
 import com.datastax.spark.connector.testkit._
+import com.datastax.spark.connector.writer.{TimestampOption, WriteConf}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.{Milliseconds, StreamingContext}
 import org.scalatest.concurrent.Eventually
@@ -75,6 +76,15 @@ class RDDStreamingSpec extends SparkCassandraITFlatSpecBase with DefaultCluster
           session.execute(s"INSERT INTO $ks.streaming_deletes (word, count) VALUES ('1words', 1)")
           session.execute(s"INSERT INTO $ks.streaming_deletes (word, count) VALUES ('1round', 2)")
           session.execute(s"INSERT INTO $ks.streaming_deletes (word, count) VALUES ('survival', 3)")
+        },
+        Future {
+          session.execute(s"CREATE TABLE $ks.streaming_deletes_with_ts (word TEXT PRIMARY KEY, count INT)")
+          // Insert rows with a known old timestamp (year 2000)
+          val oldTs = microsAtYear(2000)
+          session.execute(s"INSERT INTO $ks.streaming_deletes_with_ts (word, count) VALUES ('old_row', 1) USING TIMESTAMP $oldTs")
+          // Insert a row with a newer timestamp (year 2020)
+          val newerTs = microsAtYear(2020)
+          session.execute(s"INSERT INTO $ks.streaming_deletes_with_ts (word, count) VALUES ('future_row', 2) USING TIMESTAMP $newerTs")
         }
       )
       executor.waitForCurrentlyExecutingTasks()
@@ -216,6 +226,30 @@ class RDDStreamingSpec extends SparkCassandraITFlatSpecBase with DefaultCluster
       val result = rdd.collect
       result.length should be(1)
       result(0) should be(WordCount("survival", 3))
+    }
+  }
+
+  it should "delete rows from cassandra table using WriteConf timestamp via DStream" in withStreamingContext { ssc =>
+    // Delete with a timestamp between old (2000) and newer (2020) rows.
+    // Only the old row should be removed; the newer row survives.
+    val deleteTs = microsAtYear(2010)
+
+    val keysQueue = new mutable.Queue[RDD[Key]]()
+    keysQueue.enqueue(sc.parallelize(Seq(Key("old_row"), Key("future_row"))))
+
+    val stream = ssc.queueStream[Key](keysQueue)
+    stream.deleteFromCassandra(ks, "streaming_deletes_with_ts",
+      writeConf = WriteConf(timestamp = TimestampOption.constant(deleteTs)))
+
+    ssc.start()
+    eventually {
+      keysQueue shouldBe empty
+    }
+
+    eventually {
+      val result = ssc.cassandraTable[WordCount](ks, "streaming_deletes_with_ts").collect
+      result.length should be(1)
+      result(0) should be(WordCount("future_row", 2))
     }
   }
 }

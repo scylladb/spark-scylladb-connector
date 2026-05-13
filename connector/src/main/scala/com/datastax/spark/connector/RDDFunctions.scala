@@ -27,7 +27,7 @@ import com.datastax.spark.connector.rdd.partitioner.{CassandraPartitionedRDD, Re
 import com.datastax.spark.connector.rdd.reader._
 import com.datastax.spark.connector.rdd._
 import com.datastax.spark.connector.writer.{ReplicaLocator, _}
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 
 import scala.reflect.ClassTag
@@ -131,14 +131,9 @@ class RDDFunctions[T](rdd: RDD[T]) extends WritableToCassandra[T] with Serializa
   implicit
     connector: CassandraConnector = CassandraConnector(sparkContext),
     rwf: RowWriterFactory[T]): Unit = {
-    // column delete require full primary key, partition key is enough otherwise
-    val columnDelete = deleteColumns match {
-      case c :SomeColumns => c.columns.nonEmpty
-      case _  => false
-    }
-
-    val writer = TableWriter(connector, keyspaceName, tableName, keyColumns, writeConf, !columnDelete)
-    rdd.sparkContext.runJob(rdd, writer.delete(deleteColumns) _)
+    val writer = TableWriter.forDelete(connector, keyspaceName, tableName, deleteColumns, keyColumns, writeConf)
+    val deleteFunc: (TaskContext, Iterator[T]) => Unit = writer.deleteRows _
+    rdd.sparkContext.runJob(rdd, deleteFunc)
   }
 
   /** Applies a function to each item, and groups consecutive items having the same value together.

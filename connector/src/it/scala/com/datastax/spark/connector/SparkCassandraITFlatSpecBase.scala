@@ -19,6 +19,7 @@
 package com.datastax.spark.connector
 
 import java.io.{ByteArrayOutputStream, ObjectOutputStream}
+import java.time.{ZoneId, ZonedDateTime}
 import java.util.concurrent.Executors
 
 import com.datastax.dse.driver.api.core.metadata.DseNodeProperties
@@ -277,6 +278,10 @@ trait SparkCassandraITSpecBase
     }
     throw lastException
   }
+
+  /** Converts a year to a Cassandra-style microsecond timestamp (midnight UTC on Jan 1 of that year). */
+  protected def microsAtYear(year: Int): Long =
+    ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, ZoneId.of("UTC")).toInstant.toEpochMilli * 1000L
 
   def keyspaceCql(name: String = ks) =
     s"""

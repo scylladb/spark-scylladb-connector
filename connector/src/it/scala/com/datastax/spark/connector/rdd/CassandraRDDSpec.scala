@@ -33,6 +33,7 @@ import com.datastax.spark.connector.cql.{CassandraConnector, CassandraConnectorC
 import com.datastax.spark.connector.mapper.{DefaultColumnMapper, JavaBeanColumnMapper, JavaTestBean, JavaTestUDTBean}
 import com.datastax.spark.connector.rdd.partitioner.dht.TokenFactory
 import com.datastax.spark.connector.types.{CassandraOption, TypeConverter}
+import com.datastax.spark.connector.writer.{TimestampOption, TTLOption, WriteConf}
 import com.datastax.spark.connector.util.RuntimeUtil
 import org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException
 
@@ -329,7 +330,17 @@ class CassandraRDDSpec extends SparkCassandraITFlatSpecBase with DefaultCluster 
           executor.execute(newInstance(s"INSERT INTO $ks.date_test (key, dd) VALUES (1, '1930-05-31')"))
         }
       }
+
     )
+    awaitAll(Seq(
+      "delete_with_old_timestamp", "delete_with_future_timestamp", "delete_ignore_ttl",
+      "delete_per_row_ts", "delete_col_ts", "delete_col_old_ts", "delete_col_per_row_ts",
+      "delete_per_row_ttl_ts", "delete_per_row_ttl_without_column", "delete_all_columns",
+      "delete_all_cols_per_row_ts"
+    ).map(t => Future {
+      executor.execute(newInstance(s"""CREATE TABLE $ks.$t(key INT, group INT, value VARCHAR, PRIMARY KEY (key, group))"""))
+    }))
+    executor.execute(newInstance(s"""CREATE TABLE $ks.delete_pk_only_all_columns(key INT, group INT, PRIMARY KEY (key, group))"""))
     executor.waitForCurrentlyExecutingTasks()
     }
   }
@@ -1297,6 +1308,200 @@ class CassandraRDDSpec extends SparkCassandraITFlatSpecBase with DefaultCluster 
 
   }
 
+  private val insertTs = microsAtYear(2010)
+
+  private def setupDeleteTestTable(tableName: String): Unit = {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.$tableName""")
+      for ((k, g, v) <- Seq((10,10,"1010"),(10,11,"1011"),(10,12,"1012"),(20,20,"2020"),(20,21,"2021"),(20,22,"2022")))
+        session.execute(s"""INSERT INTO $ks.$tableName(key, group, value) VALUES ($k, $g, '$v') USING TIMESTAMP $insertTs""")
+    }
+  }
+
+  it should "not delete rows when delete timestamp is older than write timestamp" in {
+    setupDeleteTestTable("delete_with_old_timestamp")
+
+    sc.cassandraTable(ks, "delete_with_old_timestamp").where("key = 10")
+      .deleteFromCassandra(ks, "delete_with_old_timestamp",
+        writeConf = WriteConf(timestamp = TimestampOption.constant(microsAtYear(2000))))
+
+    val results1 = sc
+      .cassandraTable[(Int, Int, String)](ks, "delete_with_old_timestamp")
+      .select("key", "group", "value")
+      .collect()
+
+    results1 should have size 6
+
+  }
+
+  it should "delete rows when delete timestamp is newer than write timestamp" in {
+    setupDeleteTestTable("delete_with_future_timestamp")
+
+    sc.cassandraTable(ks, "delete_with_future_timestamp").where("key = 10")
+      .deleteFromCassandra(ks, "delete_with_future_timestamp",
+        writeConf = WriteConf(timestamp = TimestampOption.constant(microsAtYear(2020))))
+
+    val results1 = sc
+      .cassandraTable[(Int, Int, String)](ks, "delete_with_future_timestamp")
+      .select("key", "group", "value")
+      .collect()
+
+    results1 should have size 3
+
+  }
+
+  it should "delete rows and ignore ttl setting" in {
+    setupDeleteTestTable("delete_ignore_ttl")
+
+    sc.cassandraTable(ks, "delete_ignore_ttl").where("key = 10")
+      .deleteFromCassandra(ks, "delete_ignore_ttl",
+        writeConf = WriteConf(ttl = TTLOption.constant(13456)))
+
+    val results1 = sc
+      .cassandraTable[(Int, Int, String)](ks, "delete_ignore_ttl")
+      .select("key", "group", "value")
+      .collect()
+
+    results1 should have size 3
+    results1 should contain theSameElementsAs Seq(
+      (20, 20, "2020"),
+      (20, 21, "2021"),
+      (20, 22, "2022"))
+
+  }
+
+  it should "delete rows with per-row TTL when TTL column is omitted" in {
+    setupDeleteTestTable("delete_per_row_ttl_without_column")
+
+    sc.parallelize(Seq((10, 10), (10, 11)))
+      .deleteFromCassandra(ks, "delete_per_row_ttl_without_column",
+        writeConf = WriteConf(ttl = TTLOption.perRow("ignored_ttl")))
+
+    val results = sc
+      .cassandraTable[(Int, Int, String)](ks, "delete_per_row_ttl_without_column")
+      .select("key", "group", "value")
+      .collect()
+
+    results should have size 4
+    results should contain theSameElementsAs Seq(
+      (10, 12, "1012"),
+      (20, 20, "2020"),
+      (20, 21, "2021"),
+      (20, 22, "2022"))
+  }
+
+  it should "delete rows using per-row timestamp" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_per_row_ts""")
+      session.execute(s"""INSERT INTO $ks.delete_per_row_ts(key, group, value) VALUES (10, 10, '1010') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_per_row_ts(key, group, value) VALUES (10, 11, '1011') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_per_row_ts(key, group, value) VALUES (20, 20, '2020') USING TIMESTAMP $insertTs""")
+    }
+
+    // Use a newer timestamp so the delete succeeds for key=10, older timestamp for key=20
+    val newerTs = microsAtYear(2020)
+    val olderTs = microsAtYear(2000)
+
+    sc.parallelize(Seq((10, 10, newerTs), (20, 20, olderTs)))
+      .deleteFromCassandra(ks, "delete_per_row_ts",
+        writeConf = WriteConf(timestamp = TimestampOption.perRow("write_ts")))
+
+    val results = sc
+      .cassandraTable[(Int, Int, String)](ks, "delete_per_row_ts")
+      .select("key", "group", "value")
+      .collect()
+
+    // key=10,group=10 should be deleted (newer timestamp), key=20,group=20 should remain (older timestamp)
+    results should have size 2
+    results should contain theSameElementsAs Seq(
+      (10, 11, "1011"),
+      (20, 20, "2020"))
+
+  }
+
+  it should "delete specific columns with timestamp and preserve other columns" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_col_ts""")
+      session.execute(s"""INSERT INTO $ks.delete_col_ts(key, group, value) VALUES (10, 10, '1010') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_col_ts(key, group, value) VALUES (10, 11, '1011') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_col_ts(key, group, value) VALUES (20, 20, '2020') USING TIMESTAMP $insertTs""")
+    }
+
+    // Delete only the "value" column using a newer timestamp
+    val newerTs = microsAtYear(2020)
+    sc.cassandraTable(ks, "delete_col_ts").where("key = 10")
+      .deleteFromCassandra(ks, "delete_col_ts",
+        deleteColumns = SomeColumns("value"),
+        writeConf = WriteConf(timestamp = TimestampOption.constant(newerTs)))
+
+    val results = sc
+      .cassandraTable[(Int, Int, Option[String])](ks, "delete_col_ts")
+      .select("key", "group", "value")
+      .collect()
+
+    // Rows should still exist but value column should be null for key=10
+    results should have size 3
+    results should contain theSameElementsAs Seq(
+      (10, 10, None),
+      (10, 11, None),
+      (20, 20, Some("2020")))
+  }
+
+  it should "not delete specific columns when delete timestamp is older than write timestamp" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_col_old_ts""")
+      session.execute(s"""INSERT INTO $ks.delete_col_old_ts(key, group, value) VALUES (10, 10, '1010') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_col_old_ts(key, group, value) VALUES (10, 11, '1011') USING TIMESTAMP $insertTs""")
+    }
+
+    // Delete with an older timestamp — should have no effect
+    val olderTs = microsAtYear(2000)
+    sc.cassandraTable(ks, "delete_col_old_ts").where("key = 10")
+      .deleteFromCassandra(ks, "delete_col_old_ts",
+        deleteColumns = SomeColumns("value"),
+        writeConf = WriteConf(timestamp = TimestampOption.constant(olderTs)))
+
+    val results = sc
+      .cassandraTable[(Int, Int, String)](ks, "delete_col_old_ts")
+      .select("key", "group", "value")
+      .collect()
+
+    // Value column should remain because the delete timestamp is older than the write timestamp
+    results should have size 2
+    results should contain theSameElementsAs Seq(
+      (10, 10, "1010"),
+      (10, 11, "1011"))
+  }
+
+  it should "delete specific columns using per-row timestamp" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_col_per_row_ts""")
+      session.execute(s"""INSERT INTO $ks.delete_col_per_row_ts(key, group, value) VALUES (10, 10, '1010') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_col_per_row_ts(key, group, value) VALUES (20, 20, '2020') USING TIMESTAMP $insertTs""")
+    }
+
+    val newerTs = microsAtYear(2020)
+    val olderTs = microsAtYear(2000)
+
+    // Delete only the "value" column with per-row timestamps:
+    // newer timestamp for key=10 (should null out value), older timestamp for key=20 (should leave value intact)
+    sc.parallelize(Seq((10, 10, newerTs), (20, 20, olderTs)))
+      .deleteFromCassandra(ks, "delete_col_per_row_ts",
+        deleteColumns = SomeColumns("value"),
+        keyColumns = SomeColumns("key", "group", "write_ts"),
+        writeConf = WriteConf(timestamp = TimestampOption.perRow("write_ts")))
+
+    val results = sc
+      .cassandraTable[(Int, Int, Option[String])](ks, "delete_col_per_row_ts")
+      .select("key", "group", "value")
+      .collect()
+
+    results should have size 2
+    results should contain theSameElementsAs Seq(
+      (10, 10, None),
+      (20, 20, Some("2020")))
+  }
+
   it should "delete rows with specified mapping" in {
 
     sc.cassandraTable[(Int, Int)](ks, "delete_wide_rows2")
@@ -1383,6 +1588,106 @@ class CassandraRDDSpec extends SparkCassandraITFlatSpecBase with DefaultCluster 
       (10, 11, Some("1011")),
       (10, 12, Some("1012")))
 
+  }
+
+  it should "delete rows with per-row TTL and per-row TIMESTAMP ignoring TTL" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_per_row_ttl_ts""")
+      session.execute(s"""INSERT INTO $ks.delete_per_row_ttl_ts(key, group, value) VALUES (10, 10, '1010') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_per_row_ttl_ts(key, group, value) VALUES (20, 20, '2020') USING TIMESTAMP $insertTs""")
+    }
+
+    val newerTs = microsAtYear(2020)
+    val olderTs = microsAtYear(2000)
+
+    // TTL should be stripped for DELETE; only TIMESTAMP should take effect
+    sc.parallelize(Seq((10, 10, 99999, newerTs), (20, 20, 99999, olderTs)))
+      .deleteFromCassandra(ks, "delete_per_row_ttl_ts",
+        writeConf = WriteConf(
+          ttl = TTLOption.perRow("ttl"),
+          timestamp = TimestampOption.perRow("ts")))
+
+    val results = sc
+      .cassandraTable[(Int, Int, String)](ks, "delete_per_row_ttl_ts")
+      .select("key", "group", "value")
+      .collect()
+
+    // key=10 deleted (future timestamp), key=20 retained (past timestamp)
+    results should have size 1
+    results should contain theSameElementsAs Seq((20, 20, "2020"))
+  }
+
+  it should "delete non-PK columns when deleteColumns is AllColumns" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_all_columns""")
+      session.execute(s"""INSERT INTO $ks.delete_all_columns(key, group, value) VALUES (10, 10, '1010')""")
+      session.execute(s"""INSERT INTO $ks.delete_all_columns(key, group, value) VALUES (20, 20, '2020')""")
+    }
+
+    sc.parallelize(Seq((10, 10), (20, 20)))
+      .deleteFromCassandra(ks, "delete_all_columns", deleteColumns = AllColumns)
+
+    val results = sc
+      .cassandraTable[(Int, Int, Option[String])](ks, "delete_all_columns")
+      .select("key", "group", "value")
+      .collect()
+
+    // Rows still exist (primary keys remain) but value column is nulled out
+    results should have size 2
+    results should contain theSameElementsAs Seq(
+      (10, 10, None),
+      (20, 20, None))
+  }
+
+  it should "delete non-PK columns when deleteColumns is AllColumns with per-row timestamp" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_all_cols_per_row_ts""")
+      session.execute(s"""INSERT INTO $ks.delete_all_cols_per_row_ts(key, group, value) VALUES (10, 10, '1010') USING TIMESTAMP $insertTs""")
+      session.execute(s"""INSERT INTO $ks.delete_all_cols_per_row_ts(key, group, value) VALUES (20, 20, '2020') USING TIMESTAMP $insertTs""")
+    }
+
+    val newerTs = microsAtYear(2020)
+    val olderTs = microsAtYear(2000)
+
+    // Delete all non-PK columns with per-row timestamps:
+    // newer timestamp for key=10 (should null out value), older timestamp for key=20 (should leave value intact)
+    sc.parallelize(Seq((10, 10, newerTs), (20, 20, olderTs)))
+      .deleteFromCassandra(ks, "delete_all_cols_per_row_ts",
+        deleteColumns = AllColumns,
+        keyColumns = SomeColumns("key", "group", "write_ts"),
+        writeConf = WriteConf(timestamp = TimestampOption.perRow("write_ts")))
+
+    val results = sc
+      .cassandraTable[(Int, Int, Option[String])](ks, "delete_all_cols_per_row_ts")
+      .select("key", "group", "value")
+      .collect()
+
+    // key=10 value should be nulled out (future timestamp), key=20 value should remain (past timestamp)
+    results should have size 2
+    results should contain theSameElementsAs Seq(
+      (10, 10, None),
+      (20, 20, Some("2020")))
+  }
+
+  it should "delete a partition on a PK-only table when deleteColumns is AllColumns" in {
+    conn.withSessionDo { session =>
+      session.execute(s"""TRUNCATE $ks.delete_pk_only_all_columns""")
+      session.execute(s"""INSERT INTO $ks.delete_pk_only_all_columns(key, group) VALUES (10, 10)""")
+      session.execute(s"""INSERT INTO $ks.delete_pk_only_all_columns(key, group) VALUES (10, 11)""")
+      session.execute(s"""INSERT INTO $ks.delete_pk_only_all_columns(key, group) VALUES (20, 20)""")
+    }
+
+    sc.parallelize(Seq(Key(10)))
+      .deleteFromCassandra(ks, "delete_pk_only_all_columns",
+        deleteColumns = AllColumns,
+        keyColumns = SomeColumns("key"))
+
+    val results = sc
+      .cassandraTable[(Int, Int)](ks, "delete_pk_only_all_columns")
+      .select("key", "group")
+      .collect()
+
+    results should contain theSameElementsAs Seq((20, 20))
   }
 
   "DataSize Estimates" should "handle overflows in the size estimates for a table" in {

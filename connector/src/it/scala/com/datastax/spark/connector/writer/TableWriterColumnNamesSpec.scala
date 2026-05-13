@@ -197,5 +197,222 @@ class TableWriterColumnNamesSpec extends SparkCassandraITAbstractSpecBase with D
 
       writer.queryTemplateUsingInsert should endWith (""") USING TIMESTAMP :timestamp_column""")
     }
+
+    "not include TTL or TIMESTAMP in delete when not specified" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf(ttl = TTLOption.defaultValue, timestamp = TimestampOption.defaultValue)
+      )
+
+      val query = writer.deleteQueryTemplate(AllColumns)
+      query should not include "USING"
+      query should not include "TTL"
+      query should not include "TIMESTAMP"
+    }
+
+    "include TIMESTAMP in delete when static timestamp is specified" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf(ttl = TTLOption.defaultValue, timestamp = TimestampOption.constant(1400000000000L))
+      )
+
+      val query = writer.deleteQueryTemplate(AllColumns)
+      query should include ("USING TIMESTAMP 1400000000000")
+      query should not include "TTL"
+    }
+
+    "include per-row TIMESTAMP in delete" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf(ttl = TTLOption.defaultValue, timestamp = TimestampOption.perRow("timestamp_column"))
+      )
+
+      val query = writer.deleteQueryTemplate(AllColumns)
+      query should include ("USING TIMESTAMP :timestamp_column")
+      query should not include "TTL"
+    }
+
+    "ignore TTL in delete when only TTL is specified" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf(ttl = TTLOption.constant(1234), timestamp = TimestampOption.defaultValue)
+      )
+
+      val query = writer.deleteQueryTemplate(AllColumns)
+      query should not include "TTL"
+      query should not include "USING"
+    }
+
+    "ignore TTL in delete and include only TIMESTAMP when both are specified" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf(ttl = TTLOption.constant(1234), timestamp = TimestampOption.constant(1400000000000L))
+      )
+
+      val query = writer.deleteQueryTemplate(AllColumns)
+      query should not include "TTL"
+      query should include ("USING TIMESTAMP 1400000000000")
+    }
+
+    "include auto TIMESTAMP in update when no timestamp is specified" in {
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = AllColumns,
+        writeConf = WriteConf(ttl = TTLOption.defaultValue, timestamp = TimestampOption.defaultValue)
+      )
+
+      val query = writer.queryTemplateUsingUpdate
+      query should include (s"USING TIMESTAMP :${TableWriter.AutoTimestampParam}")
+      query should not include "TTL"
+    }
+
+    "include static TIMESTAMP in update when static timestamp is specified" in {
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = AllColumns,
+        writeConf = WriteConf(ttl = TTLOption.defaultValue, timestamp = TimestampOption.constant(1400000000000L))
+      )
+
+      val query = writer.queryTemplateUsingUpdate
+      query should include ("USING TIMESTAMP 1400000000000")
+      query should not include "TTL"
+    }
+
+    "include per-row TIMESTAMP in update" in {
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = AllColumns,
+        writeConf = WriteConf(ttl = TTLOption.defaultValue, timestamp = TimestampOption.perRow("timestamp_column"))
+      )
+
+      val query = writer.queryTemplateUsingUpdate
+      query should include ("USING TIMESTAMP :timestamp_column")
+      query should not include "TTL"
+    }
+
+    "include TTL and auto TIMESTAMP in update when only TTL is specified" in {
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = AllColumns,
+        writeConf = WriteConf(ttl = TTLOption.constant(1234), timestamp = TimestampOption.defaultValue)
+      )
+
+      val query = writer.queryTemplateUsingUpdate
+      query should include (s"USING TTL 1234 AND TIMESTAMP :${TableWriter.AutoTimestampParam}")
+    }
+
+    "include both TTL and static TIMESTAMP in update" in {
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = AllColumns,
+        writeConf = WriteConf(ttl = TTLOption.constant(1234), timestamp = TimestampOption.constant(1400000000000L))
+      )
+
+      val query = writer.queryTemplateUsingUpdate
+      query should include ("USING TTL 1234 AND TIMESTAMP 1400000000000")
+    }
+
+    "include per-row TTL and per-row TIMESTAMP in update" in {
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = AllColumns,
+        writeConf = WriteConf(ttl = TTLOption.perRow("ttl_column"), timestamp = TimestampOption.perRow("timestamp_column"))
+      )
+
+      val query = writer.queryTemplateUsingUpdate
+      query should include ("USING TTL :ttl_column AND TIMESTAMP :timestamp_column")
+    }
+
+    "ignore per-row TTL in delete" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf(ttl = TTLOption.perRow("ttl_column"), timestamp = TimestampOption.defaultValue)
+      )
+
+      val query = writer.deleteQueryTemplate(SomeColumns())
+      query should not include "TTL"
+      query should not include "USING"
+    }
+
+    "ignore per-row TTL in delete and include only TIMESTAMP when both are specified" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf(ttl = TTLOption.perRow("ttl_column"), timestamp = TimestampOption.constant(1400000000000L))
+      )
+
+      val query = writer.deleteQueryTemplate(SomeColumns())
+      query should not include "TTL"
+      query should include ("USING TIMESTAMP 1400000000000")
+    }
+
+    "reject regular columns as key columns for DELETE" in {
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = AllColumns,
+        writeConf = WriteConf()
+      )
+
+      val thrown = intercept[IllegalArgumentException] {
+        writer.deleteQueryTemplate(SomeColumns())
+      }
+      thrown.getMessage should include ("Regular columns found")
+    }
+
+    "generate column-level DELETE for AllColumns by filtering out primary key columns" in {
+      val keyOnlyColumns: Seq[ColumnRef] = Seq("key", "group")
+      val writer = TableWriter(
+        conn,
+        keyspaceName = ks,
+        tableName = "key_value",
+        columnNames = SomeColumns(keyOnlyColumns: _*),
+        writeConf = WriteConf()
+      )
+
+      val query = writer.deleteQueryTemplate(AllColumns)
+      query should startWith regex """DELETE "value" FROM"""
+      query should include ("WHERE")
+    }
   }
 }

@@ -116,6 +116,15 @@ class TableWriterSpec extends SparkCassandraITFlatSpecBase with DefaultCluster {
         },
         Future {
           session.execute( s"""CREATE TABLE $ks.write_if_not_exists_test (id INT PRIMARY KEY, value TEXT)""")
+        },
+        Future {
+          session.execute( s"""CREATE TABLE $ks.delete_with_timestamp (key INT PRIMARY KEY, scol set<text>)""")
+        },
+        Future {
+          session.execute( s"""CREATE TABLE $ks.update_with_ttl (key INT PRIMARY KEY, scol set<text>, marker TEXT)""")
+        },
+        Future {
+          session.execute( s"""CREATE TABLE $ks.update_with_per_row_ttl (key INT PRIMARY KEY, scol set<text>, marker TEXT, ttl_col INT)""")
         }
       )
     }
@@ -422,6 +431,17 @@ class TableWriterSpec extends SparkCassandraITFlatSpecBase with DefaultCluster {
     val col = for (i <- 1 to rowCount) yield (i, 1)
     sc.parallelize(col).saveToCassandra(ks, "counters2", SomeColumns("pkey", "c"))
     sc.cassandraTable(ks, "counters2").cassandraCount() should be(rowCount)
+  }
+
+  it should "update counter table with TTL in WriteConf without error" in {
+    conn.withSessionDo(_.execute(s"""TRUNCATE $ks.counters2"""))
+    val col = Seq((1, 1))
+    sc.parallelize(col).saveToCassandra(ks, "counters2", SomeColumns("pkey", "c"),
+      writeConf = WriteConf(ttl = TTLOption.constant(100)))
+    conn.withSessionDo { session =>
+      val result = session.execute(s"""SELECT * FROM $ks.counters2""").one()
+      result.getLong("c") shouldEqual 1L
+    }
   }
 
   it should "write values of user-defined classes" in {
@@ -904,6 +924,80 @@ class TableWriterSpec extends SparkCassandraITFlatSpecBase with DefaultCluster {
     }
     e.getMessage should include("mcol")
     e.getMessage should include("scol")
+  }
+
+
+  it should "delete rows that were written with an older timestamp" in {
+    conn.withSessionDo(_.execute(s"""TRUNCATE $ks.delete_with_timestamp"""))
+
+    val setElements = sc.parallelize(Seq(
+      (1, Set("Four")),
+      (1, Set("Five")),
+      (1, Set("Six"))))
+    //Update data to year 1999
+    setElements.saveToCassandra(ks, "delete_with_timestamp", SomeColumns("key", "scol".append),
+      writeConf = WriteConf(timestamp = TimestampOption.constant(microsAtYear(1999))))
+
+    val newerElements = sc.parallelize(Seq(
+      (2, Set("Seven")),
+      (2, Set("Eight"))))
+    newerElements.saveToCassandra(ks, "delete_with_timestamp", SomeColumns("key", "scol".append),
+      writeConf = WriteConf(timestamp = TimestampOption.constant(microsAtYear(2020))))
+
+    // Try to delete rows older than year 2000.
+    sc.cassandraTable(ks, "delete_with_timestamp")
+      .deleteFromCassandra(ks, "delete_with_timestamp",
+        writeConf = WriteConf(timestamp = TimestampOption.constant(microsAtYear(2000))))
+
+    val result = sc.cassandraTable[(Int, Set[String])](ks, "delete_with_timestamp")
+      .select("key", "scol")
+      .collect()
+
+    result should contain theSameElementsAs Seq((2, Set("Seven", "Eight")))
+  }
+
+  it should "apply TTL to UPDATE when appending to a collection" in {
+    conn.withSessionDo(_.execute(s"""TRUNCATE $ks.update_with_ttl"""))
+
+    val setElements = sc.parallelize(Seq(
+      (1, Set("One"), "x"),
+      (1, Set("Two"), "x"),
+      (1, Set("Three"), "x")))
+
+    setElements.saveToCassandra(ks, "update_with_ttl", SomeColumns("key", "scol".append, "marker"),
+      writeConf = WriteConf(ttl = TTLOption.constant(300)))
+
+    // Verify TTL was applied using a regular column; SELECT TTL on collection columns
+    // is fragile across Scylla/Cassandra versions.
+    conn.withSessionDo { session =>
+      val row = session.execute(s"SELECT scol, TTL(marker) FROM $ks.update_with_ttl WHERE key = 1").one()
+      row.getSet("scol", classOf[String]).asScala.toSet should contain theSameElementsAs Set("One", "Two", "Three")
+      row.getInt(1) should be > 0
+    }
+  }
+
+  it should "apply per-row TTL to UPDATE when appending to a collection" in {
+    conn.withSessionDo(_.execute(s"""TRUNCATE $ks.update_with_per_row_ttl"""))
+
+    // Write rows with different per-row TTL values
+    val setElements = sc.parallelize(Seq(
+      (1, Set("A"), "x", 3600),
+      (2, Set("B"), "x", 600)))
+
+    setElements.saveToCassandra(ks, "update_with_per_row_ttl", SomeColumns("key", "scol".append, "marker"),
+      writeConf = WriteConf(ttl = TTLOption.perRow("ttl_col")))
+
+    // Verify different TTLs were applied using a regular column; SELECT TTL on collection
+    // columns is fragile across Scylla/Cassandra versions.
+    conn.withSessionDo { session =>
+      val row1 = session.execute(s"SELECT scol, TTL(marker) FROM $ks.update_with_per_row_ttl WHERE key = 1").one()
+      val row2 = session.execute(s"SELECT scol, TTL(marker) FROM $ks.update_with_per_row_ttl WHERE key = 2").one()
+      row1.getSet("scol", classOf[String]).asScala.toSet should contain theSameElementsAs Set("A")
+      row2.getSet("scol", classOf[String]).asScala.toSet should contain theSameElementsAs Set("B")
+      row1.getInt(1) should (be > 0 and be <= 3600)
+      row2.getInt(1) should (be > 0 and be <= 600)
+      row1.getInt(1) should be > (row2.getInt(1) + 2500)
+    }
   }
 
   it should "insert and not overwrite existing keys when ifNotExists is true" in {
