@@ -261,7 +261,15 @@ object ScanHelper extends Logging {
    * Bind values to an already-prepared statement.
    */
   def bindScanStatement(preparedStatement: PreparedStatement, values: Any*): BoundStatement = {
-    val variableDefinitions = preparedStatement.getVariableDefinitions.asScala.toIndexedSeq
+    def bindingException(t: Throwable) =
+      new IOException(s"Exception during binding of prepared statement: ${t.getMessage}", t)
+
+    val variableDefinitions = try {
+      preparedStatement.getVariableDefinitions.asScala.toIndexedSeq
+    }
+    catch {
+      case t: Throwable => throw bindingException(t)
+    }
     val expectedValues = variableDefinitions.size
     if (values.size != expectedValues) {
       throw new IOException(
@@ -280,7 +288,7 @@ object ScanHelper extends Logging {
     }
     catch {
       case t: Throwable =>
-        throw new IOException(s"Exception during binding of prepared statement: ${t.getMessage}", t)
+        throw bindingException(t)
     }
   }
 
