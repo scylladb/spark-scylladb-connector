@@ -1,4 +1,5 @@
 Unreleased
+ * Cache token-range scan prepared statements by CQL template to avoid bind arity mismatches (#110)
  * Fix batched writes carrying consistency level on child statements,
    avoiding DefaultBatchStatement warnings (#98)
  * Avoid requiring ignored per-row write option placeholders for counter updates (#102)

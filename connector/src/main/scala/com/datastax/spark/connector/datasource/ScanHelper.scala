@@ -38,6 +38,11 @@ import scala.jdk.CollectionConverters._
 
 object ScanHelper extends Logging {
 
+  type PreparedStatementCache = scala.collection.mutable.Map[String, PreparedStatement]
+
+  def newPreparedStatementCache(): PreparedStatementCache =
+    scala.collection.mutable.Map.empty[String, PreparedStatement]
+
 
   def checkColumnsExistence(columns: Seq[ColumnRef], tableDef: TableDef): Seq[ColumnRef] = {
     val allColumnNames = tableDef.columns.map(_.columnName).toSet
@@ -90,6 +95,39 @@ object ScanHelper extends Logging {
         s"with params ${values.mkString("[", ",", "]")}")
 
     val stmt = prepareScanStatement(session, cql, values: _*)
+      .setConsistencyLevel(consistencyLevel)
+      .setPageSize(fetchSize)
+      .setRoutingToken(range.range.startNativeToken())
+
+    val scanResult = scanner.scan(stmt)
+    logDebug(s"Row iterator for range ${range.cql(partitionKeyStr(tableDef))} obtained successfully.")
+
+    scanResult
+  }
+
+  /**
+   * Variant of fetchTokenRange that reuses prepared statements by exact CQL template.
+   */
+  def fetchTokenRange(
+    scanner: Scanner,
+    tableDef: TableDef,
+    queryParts: CqlQueryParts,
+    range: CqlTokenRange[_, _],
+    consistencyLevel: ConsistencyLevel,
+    fetchSize: Int,
+    preparedStatements: PreparedStatementCache): ScanResult = {
+
+    val session = scanner.getSession()
+
+    val (cql, values) = tokenRangeToCqlQuery(range, tableDef, queryParts)
+
+    logDebug(
+      s"Fetching data for range ${range.cql(partitionKeyStr(tableDef))} " +
+        s"with $cql " +
+        s"with params ${values.mkString("[", ",", "]")}")
+
+    val preparedStatement = getOrPrepareScanStatement(session, cql, preparedStatements)
+    val stmt = bindScanStatement(preparedStatement, values: _*)
       .setConsistencyLevel(consistencyLevel)
       .setPageSize(fetchSize)
       .setRoutingToken(range.range.startNativeToken())
@@ -212,12 +250,34 @@ object ScanHelper extends Logging {
     }
   }
 
+  def getOrPrepareScanStatement(
+      session: CqlSession,
+      cql: String,
+      preparedStatements: PreparedStatementCache): PreparedStatement = {
+    preparedStatements.getOrElseUpdate(cql, prepareScanStatement(session, cql))
+  }
+
   /**
    * Bind values to an already-prepared statement.
    */
   def bindScanStatement(preparedStatement: PreparedStatement, values: Any*): BoundStatement = {
+    def bindingException(t: Throwable) =
+      new IOException(s"Exception during binding of prepared statement: ${t.getMessage}", t)
+
+    val variableDefinitions = try {
+      preparedStatement.getVariableDefinitions.asScala.toIndexedSeq
+    }
+    catch {
+      case t: Throwable => throw bindingException(t)
+    }
+    val expectedValues = variableDefinitions.size
+    if (values.size != expectedValues) {
+      throw new IOException(
+        s"Cannot bind prepared scan statement: expected $expectedValues bind values, but got ${values.size}")
+    }
+
     try {
-      val converters = preparedStatement.getVariableDefinitions.asScala
+      val converters = variableDefinitions
         .map(v => ColumnType.converterToCassandra(v.getType))
         .toArray
       val convertedValues =
@@ -228,7 +288,7 @@ object ScanHelper extends Logging {
     }
     catch {
       case t: Throwable =>
-        throw new IOException(s"Exception during binding of prepared statement: ${t.getMessage}", t)
+        throw bindingException(t)
     }
   }
 
