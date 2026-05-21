@@ -35,6 +35,7 @@ import com.datastax.spark.connector.cql._
 import com.datastax.spark.connector.types.{CounterType, IntType, ListType, SetType, TextType, UUIDType}
 import org.apache.spark.TaskContext
 import org.junit.{Assert, Test}
+import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito._
 
@@ -175,6 +176,47 @@ class TableWriterRegressionTest {
         Assert.assertTrue(e.getMessage.contains("INSERT"))
         Assert.assertTrue(e.getMessage.contains("ttl_col"))
     }
+  }
+
+  @Test
+  def preparedWriteStatementShouldNotCarryWriteAttributes(): Unit = {
+    val preparedStatement = preparedStatementWithVariables(
+      "pk" -> ProtocolConstants.DataType.INT,
+      "ck" -> ProtocolConstants.DataType.INT,
+      "value" -> ProtocolConstants.DataType.VARCHAR)
+    val session = mock(classOf[CqlSession])
+    val context = mock(classOf[DriverContext])
+    when(context.getProtocolVersion).thenReturn(ProtocolVersion.DEFAULT)
+    when(session.getContext).thenReturn(context)
+    when(session.prepare(any(classOf[SimpleStatement]))).thenReturn(preparedStatement)
+
+    val connector = new CassandraConnector(createConnector().conf) {
+      override def openSession(): CqlSession = session
+      override def withSessionDo[T](code: CqlSession => T): T = code(session)
+    }
+
+    val writer = TableWriter[CassandraRow](
+      connector,
+      createTableDef(),
+      AllColumns,
+      WriteConf(
+        batchGroupingKey = BatchGroupingKey.None,
+        consistencyLevel = com.datastax.oss.driver.api.core.DefaultConsistencyLevel.THREE),
+      partitionKeyOnly = false,
+      partitions = Array.empty,
+      tokenRangeAcc = None,
+      isDelete = false)
+
+    writer.getAsyncWriter()
+
+    val stmtCaptor = ArgumentCaptor.forClass(classOf[SimpleStatement])
+    verify(session).prepare(stmtCaptor.capture())
+    val preparedTemplate = stmtCaptor.getValue
+
+    Assert.assertNull("Prepared template should not carry a consistency level",
+      preparedTemplate.getConsistencyLevel)
+    Assert.assertNull("Prepared template should not be marked idempotent",
+      preparedTemplate.isIdempotent)
   }
 
   @Test

@@ -18,26 +18,53 @@
 
 package com.datastax.spark.connector.writer
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.cql.AsyncResultSet
+import com.datastax.oss.driver.api.core.cql.{AsyncResultSet, Statement}
 import com.datastax.spark.connector.cql.CassandraConnectorConf
 import com.datastax.spark.connector.writer.AsyncExecutor.Handler
 
 class QueryExecutor(
- session: CqlSession,
- maxConcurrentQueries: Int,
- successHandler: Option[Handler[RichStatement]],
- failureHandler: Option[Handler[RichStatement]],
- maxRetries: Int = CassandraConnectorConf.QueryRetryMaxRetriesParam.default)
+    session: CqlSession,
+    maxConcurrentQueries: Int,
+    successHandler: Option[Handler[RichStatement]],
+    failureHandler: Option[Handler[RichStatement]],
+    maxRetries: Int,
+    consistencyLevel: Option[ConsistencyLevel],
+    isIdempotent: Option[Boolean])
 
   extends AsyncExecutor[RichStatement, AsyncResultSet](
-    stmt => session.executeAsync(stmt.stmt),
+    stmt => session.executeAsync(QueryExecutor.applyWriteAttributes(stmt.stmt, consistencyLevel, isIdempotent)),
     maxConcurrentQueries,
     successHandler,
     failureHandler,
-    maxRetries)
+    maxRetries) {
+
+  // Preserve the legacy JVM constructor signature for compiled callers.
+  def this(
+      session: CqlSession,
+      maxConcurrentQueries: Int,
+      successHandler: Option[Handler[RichStatement]],
+      failureHandler: Option[Handler[RichStatement]],
+      maxRetries: Int) =
+    this(session, maxConcurrentQueries, successHandler, failureHandler, maxRetries, None, None)
+}
 
 object QueryExecutor {
+
+  private[writer] def applyWriteAttributes(
+      stmt: Statement[_ <: Statement[_]],
+      consistencyLevel: Option[ConsistencyLevel],
+      isIdempotent: Option[Boolean]): Statement[_ <: Statement[_]] = {
+    val withConsistency = consistencyLevel match {
+      case Some(level) => stmt.setConsistencyLevel(level)
+      case None => stmt
+    }
+    isIdempotent match {
+      case Some(flag) => withConsistency.setIdempotent(flag)
+      case None => withConsistency
+    }
+  }
 
   def apply(
     session: CqlSession,
@@ -45,7 +72,12 @@ object QueryExecutor {
     successHandler: Option[Handler[RichStatement]],
     failureHandler: Option[Handler[RichStatement]]): QueryExecutor = {
 
-    new QueryExecutor(session, maxConcurrentQueries, successHandler, failureHandler)
+    new QueryExecutor(
+      session,
+      maxConcurrentQueries,
+      successHandler,
+      failureHandler,
+      CassandraConnectorConf.QueryRetryMaxRetriesParam.default)
   }
 
   def apply(
