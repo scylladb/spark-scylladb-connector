@@ -279,13 +279,9 @@ class TableWriter[T] private (
 
   private def prepareStatement(
       queryTemplate:String,
-      session: CqlSession,
-      idempotent: Boolean): PreparedStatement = {
+      session: CqlSession): PreparedStatement = {
     try {
-      val stmt = SimpleStatement.newInstance(queryTemplate)
-        .setIdempotent(idempotent)
-        .setConsistencyLevel(writeConf.consistencyLevel)
-      session.prepare(stmt)
+      session.prepare(SimpleStatement.newInstance(queryTemplate))
     }
     catch {
       case t: Throwable =>
@@ -363,8 +359,7 @@ class TableWriter[T] private (
       val protocolVersion = session.getContext.getProtocolVersion
       val deleteStatement = isDelete || isDeleteStatement
       val statementIdempotent = if (deleteStatement) true else isIdempotent
-      val stmt = prepareStatement(queryTemplate, session,
-        idempotent = statementIdempotent)
+      val stmt = prepareStatement(queryTemplate, session)
       val batchType = if (isCounterUpdate) DefaultBatchType.COUNTER else DefaultBatchType.UNLOGGED
 
       val boundStmtBuilder = new BoundStatementBuilder(
@@ -392,7 +387,8 @@ class TableWriter[T] private (
           (stmt: RichStatement) => ()
       }
 
-      AsyncStatementWriter(connector, writeConf, tableDef, stmt, batchBuilder, maybeRateLimit)
+      AsyncStatementWriter(connector, writeConf, tableDef, stmt, batchBuilder, maybeRateLimit,
+        statementIdempotent = statementIdempotent)
     }
   }
 
@@ -430,6 +426,7 @@ case class AsyncStatementWriter[T](
   preparedStatement: PreparedStatement,
   groupingBatchBuilderBase: GroupingBatchBuilderBase[T],
   maybeRateLimit: RichStatement => Unit,
+  statementIdempotent: Boolean = false,
   successHandler: Option[Handler[RichStatement]] = None,
   failureHandler: Option[Handler[RichStatement]] = None)
   extends Closeable
@@ -442,7 +439,9 @@ case class AsyncStatementWriter[T](
 
   private lazy val queryExecutor = new QueryExecutor(
     session, writeConf.parallelismLevel, successHandler, failureHandler,
-    maxRetries = connector.conf.queryRetryMaxRetries)
+    maxRetries = connector.conf.queryRetryMaxRetries,
+    consistencyLevel = Some(writeConf.consistencyLevel),
+    isIdempotent = Some(statementIdempotent))
 
   def write(record: T): Unit= {
     groupingBatchBuilderBase.batchRecord(record).foreach{ stmt =>
