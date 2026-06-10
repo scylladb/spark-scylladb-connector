@@ -41,16 +41,16 @@ jobs:
     name: "Compile"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Restore SBT cache
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.sbt
@@ -61,7 +61,7 @@ jobs:
             sbt-${{ runner.os }}-
 
       - name: Restore Maven cache
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
@@ -72,7 +72,7 @@ jobs:
         run: SCALA_VERSION=${{ inputs.scala-versions || '2-LATEST' }} make compile
 
       - name: Cache compiled classes
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             **/target/scala-*
@@ -84,16 +84,16 @@ jobs:
     needs: compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Restore SBT cache
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.sbt
@@ -104,7 +104,7 @@ jobs:
             sbt-${{ runner.os }}-
 
       - name: Restore Maven cache
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
@@ -112,7 +112,7 @@ jobs:
             maven-${{ runner.os }}-
 
       - name: Restore compiled classes
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             **/target/scala-*
@@ -127,16 +127,16 @@ jobs:
     needs: compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Restore SBT cache
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.sbt
@@ -147,7 +147,7 @@ jobs:
             sbt-${{ runner.os }}-
 
       - name: Restore Maven cache
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
@@ -155,7 +155,7 @@ jobs:
             maven-${{ runner.os }}-
 
       - name: Restore compiled classes
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             **/target/scala-*
@@ -166,7 +166,7 @@ jobs:
         run: make test-unit
 
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v6
+        uses: mikepenz/action-junit-report@3a81627bfac62268172037048872e8ebd4207e6d # v6.4.1
         if: always()
         with:
           report_paths: '**/target/test-reports/*.xml'
@@ -179,16 +179,16 @@ jobs:
     needs: compile
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: "temurin"
           java-version: "17"
 
       - name: Restore SBT cache
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.sbt
@@ -199,7 +199,7 @@ jobs:
             sbt-${{ runner.os }}-
 
       - name: Restore Maven cache
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
@@ -213,7 +213,7 @@ jobs:
         run: make test-coverage
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: coverage-report
@@ -227,7 +227,7 @@ jobs:
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Generate matrix with alternating scala versions
         id: matrix
@@ -250,10 +250,10 @@ jobs:
       PUBLISH_VERSION: test
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.10'
 
@@ -265,7 +265,7 @@ jobs:
         run: echo "value=$(ccm --version 2>&1 | head -1 || echo 'unknown')" >> $GITHUB_OUTPUT
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: "temurin"
           java-version: | # order matters: last one becomes JAVA_HOME (used by SBT)
@@ -285,7 +285,7 @@ jobs:
           fi
 
       - name: Restore SBT cache
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             ~/.sbt
@@ -297,7 +297,7 @@ jobs:
             sbt-${{ runner.os }}-
 
       - name: Restore Maven cache
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
@@ -305,7 +305,7 @@ jobs:
             maven-${{ runner.os }}-
 
       - name: Restore compiled classes
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: |
             **/target/scala-*
@@ -325,7 +325,7 @@ jobs:
         run: make resolve-scala-version
 
       - name: Restore CCM cache
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         id: ccm-cache
         with:
           path: ~/.ccm/${{ matrix.db-type == 'scylla' && 'scylla-repository' || 'repository' }}
@@ -336,7 +336,7 @@ jobs:
         run: make download-${{ matrix.db-type }}
 
       - name: Save CCM cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         if: steps.ccm-cache.outputs.cache-hit != 'true'
         with:
           path: ~/.ccm/${{ matrix.db-type == 'scylla' && 'scylla-repository' || 'repository' }}
@@ -351,7 +351,7 @@ jobs:
           fi
 
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v6
+        uses: mikepenz/action-junit-report@3a81627bfac62268172037048872e8ebd4207e6d # v6.4.1
         if: always()
         with:
           report_paths: '**/target/test-reports/*.xml'
