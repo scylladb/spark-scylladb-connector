@@ -23,7 +23,7 @@ import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.util.{Collections => JCollections}
 
-import com.datastax.oss.driver.api.core.{CqlIdentifier, CqlSession, ProtocolVersion}
+import com.datastax.oss.driver.api.core.{CqlIdentifier, CqlSession, ProtocolVersion, RequestRoutingType}
 import com.datastax.oss.driver.api.core.`type`.codec.registry.CodecRegistry
 import com.datastax.oss.driver.api.core.context.DriverContext
 import com.datastax.oss.driver.api.core.cql.{BoundStatement, ColumnDefinition, ColumnDefinitions, PreparedStatement, SimpleStatement}
@@ -99,7 +99,7 @@ class TableWriterRegressionTest {
       false,
       CodecRegistry.DEFAULT,
       ProtocolVersion.DEFAULT,
-      false)
+      RequestRoutingType.REGULAR)
   }
 
   private def connectorReturning(preparedStatement: PreparedStatement): CassandraConnector = {
