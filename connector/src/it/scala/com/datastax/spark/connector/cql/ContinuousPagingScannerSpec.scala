@@ -55,10 +55,7 @@ class ContinuousPagingScannerSpec extends SparkCassandraITFlatSpecBase with Defa
         }
       )
 
-      session.execute(
-        s"""CREATE KEYSPACE IF NOT EXISTS $ks
-           |WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }"""
-          .stripMargin)
+      session.execute(keyspaceCql(session, ks))
       session.execute(s"CREATE TABLE $ks.$table (p int, c int, d int, PRIMARY KEY (p,c))")
       session.execute(s"INSERT INTO $ks.$table (p,c,d) VALUES (1,1,1)")
     }

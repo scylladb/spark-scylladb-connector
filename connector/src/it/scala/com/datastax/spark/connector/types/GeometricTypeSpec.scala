@@ -55,10 +55,7 @@ class GeometricTypeSpec extends SparkCassandraITFlatSpecBase with DefaultCluster
     dseOnly
     {
       conn.withSessionDo { session =>
-        session.execute(
-          s"""CREATE KEYSPACE IF NOT EXISTS $ks
-             |WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }"""
-            .stripMargin)
+        session.execute(keyspaceCql(session, ks))
         makeGeometricTables(session)
       }
     }
