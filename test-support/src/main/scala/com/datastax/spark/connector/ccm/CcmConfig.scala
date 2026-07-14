@@ -42,6 +42,8 @@ case class CcmConfig(
     installBranch: Option[String] = Option(System.getProperty("ccm.branch")),
     dseEnabled: Boolean = Option(System.getProperty("ccm.dse")).exists(_.toLowerCase == "true"),
     scyllaEnabled: Boolean = Option(System.getProperty("ccm.scylla")).exists(_.toLowerCase == "true"),
+    defaultSSTableCompression: String =
+      Option(System.getProperty("ccm.sstable_compression")).filter(_.trim.nonEmpty).getOrElse(DefaultSSTableCompression),
     javaVersion: Option[Int] = None,
     mode: ClusterMode = ClusterModes.fromEnvVar) {
 
@@ -161,6 +163,8 @@ case class CcmConfig(
 object CcmConfig {
 
   val logger: Logger = LoggerFactory.getLogger(classOf[CcmConfig])
+
+  val DefaultSSTableCompression: String = "LZ4Compressor"
 
   // Cache for resolved Scylla versions to avoid expensive CCM cluster creation
   private val versionCache = new java.util.concurrent.ConcurrentHashMap[String, Version]()

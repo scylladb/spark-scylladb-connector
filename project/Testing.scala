@@ -92,6 +92,10 @@ object Testing {
     val ccmScylla = sys.env.get("CCM_IS_SCYLLA").map(_.toLowerCase == "true")
       .orElse(sys.props.get("ccm.scylla").map(_.toLowerCase == "true"))
       .map(isScylla => s"-Dccm.scylla=$isScylla")
+    val ccmSSTableCompression = sys.env.get("CCM_SSTABLE_COMPRESSION")
+      .filter(_.nonEmpty)
+      .orElse(sys.props.get("ccm.sstable_compression"))
+      .map(compression => s"-Dccm.sstable_compression=$compression")
     val cassandraDirectory = sys.env.get("CCM_INSTALL_DIR").orElse(sys.props.get("cassandra.directory")).map(dir => s"-Dcassandra.directory=$dir")
     val ccmJava = sys.env.get("CCM_JAVA_HOME").orElse(sys.env.get("JAVA_HOME")).map(dir => s"-Dccm.java.home=$dir")
     val ccmPath = sys.env.get("CCM_JAVA_HOME").orElse(sys.env.get("JAVA_HOME")).map(dir => s"-Dccm.path=$dir/bin")
@@ -116,7 +120,7 @@ object Testing {
       Seq.empty
     }
 
-    val options = Seq(ccmVersion, ccmDse, ccmScylla, cassandraVersion, cassandraDirectory, ccmJava, ccmPath) ++ javaModuleOptions
+    val options = Seq(ccmVersion, ccmDse, ccmScylla, ccmSSTableCompression, cassandraVersion, cassandraDirectory, ccmJava, ccmPath) ++ javaModuleOptions
     options
   }
 

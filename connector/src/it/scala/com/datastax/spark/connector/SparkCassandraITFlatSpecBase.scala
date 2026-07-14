@@ -209,6 +209,13 @@ trait SparkCassandraITSpecBase
   /** Returns true if running against Scylla */
   def isScylla: Boolean = CcmConfig().scyllaEnabled
 
+  /** Returns the expected default sstable compression class (short name) for the current database.
+    * Configurable via the `ccm.sstable_compression` system property or `CCM_SSTABLE_COMPRESSION`
+    * environment variable. Defaults to "LZ4Compressor".
+    * Set to "LZ4DictCompression" when testing against Scylla LATEST which uses a different default.
+    */
+  def defaultSSTableCompression: String = CcmConfig().defaultSSTableCompression
+
   /** Skips the given test if the cluster is Scylla.
     * @param issue Issue reference in format "scylladb/scylladb#NNN: description" or
     *              "scylladb/spark-scylladb-connector#NNN: description" explaining why the test is skipped

@@ -292,6 +292,27 @@ class CassandraCatalogTableSpec extends CassandraCatalogSpecBase {
     val results = rows.map( row => (row.getString(0), CassandraSourceUtil.parseProperty(row.getString(1)))).toMap
     results("clustering_key").asInstanceOf[String] should include ("cc1.ASC,cc2.DESC,cc3.ASC")
     results("gc_grace_seconds").asInstanceOf[String] should be("864000")
+    results.get("compression") match {
+      case Some(compression: java.util.Map[_, _]) =>
+        compression.asScala.collectFirst {
+          case (key, value) if key.toString == "class" => value.toString.split('.').last
+        } match {
+          case Some(actualCompressionClass) =>
+            actualCompressionClass should be (defaultSSTableCompression)
+          case None if isScylla =>
+            report("Skipped compression class check because Scylla did not report default table compression")
+          case None =>
+            fail("compression class was not reported")
+        }
+      case None if isScylla =>
+        report("Skipped compression class check because Scylla did not report default table compression")
+      case None =>
+        fail("compression property was not reported")
+      case Some(compression) if isScylla =>
+        report(s"Skipped compression class check because Scylla reported compression as ${compression.toString}")
+      case Some(compression) =>
+        fail(s"compression property had unexpected format: ${compression.getClass.getName}")
+    }
   }
 
   it should "alter table properties" in {
