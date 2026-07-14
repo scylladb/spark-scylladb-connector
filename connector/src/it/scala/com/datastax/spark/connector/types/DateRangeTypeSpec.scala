@@ -46,10 +46,7 @@ class DateRangeTypeSpec extends SparkCassandraITFlatSpecBase with DefaultCluster
   override def beforeClass {
     dseOnly {
       conn.withSessionDo { session =>
-        session.execute(
-          s"""CREATE KEYSPACE IF NOT EXISTS $ks
-             |WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }"""
-            .stripMargin)
+        session.execute(keyspaceCql(session, ks))
         makeDateRangeTables(session)
       }
     }
@@ -102,4 +99,3 @@ class DateRangeTypeSpec extends SparkCassandraITFlatSpecBase with DefaultCluster
   }
 
 }
-

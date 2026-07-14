@@ -36,7 +36,7 @@ class CassandraCatalogNamespaceSpec extends CassandraCatalogSpecBase {
   }
 
   it should "list a keyspaces in a keyspace"  in {
-    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     waitForKeyspaceToExist(defaultKs)
     //Using Catalog and DefaultKS triggers listNamespaces(namespace) pathway
     val result = spark.sql(s"SHOW NAMESPACES FROM $defaultCatalog.$defaultKs").collect
@@ -52,7 +52,7 @@ class CassandraCatalogNamespaceSpec extends CassandraCatalogSpecBase {
   it should "be able to create a new keyspace" in {
     dropKeyspace(defaultKs)
     waitForKeyspaceToExist(defaultKs, false)
-    spark.sql(s"CREATE DATABASE $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+    spark.sql(s"CREATE DATABASE $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     waitForKeyspaceToExist(defaultKs)
     spark.sql(s"DESCRIBE DATABASE EXTENDED $defaultKs").show
   }
@@ -60,8 +60,7 @@ class CassandraCatalogNamespaceSpec extends CassandraCatalogSpecBase {
   it should "be able to create a new keyspace with NTS" in {
     dropKeyspace(defaultKs)
     waitForKeyspaceToExist(defaultKs, false)
-    val datacenterName = getMetadata().getNodes.values().iterator().next().getDatacenter
-    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (class='NetworkTopologyStrategy', $datacenterName='1')")
+    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties(1)})")
     waitForKeyspaceToExist(defaultKs)
     spark.sql(s"DESCRIBE DATABASE EXTENDED $defaultKs").show
   }
@@ -85,39 +84,39 @@ class CassandraCatalogNamespaceSpec extends CassandraCatalogSpecBase {
   }
 
   it should "throw a keyspace exists exception when creating a keyspace that already exists" in {
-    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     waitForKeyspaceToExist(defaultKs)
     intercept[NamespaceAlreadyExistsException]{
-      spark.sql(s"CREATE DATABASE $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+      spark.sql(s"CREATE DATABASE $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     }
   }
 
   it should "explain Cassandra specific properties in the describe statement" in {
     dropKeyspace(defaultKs)
-    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     waitForKeyspaceToExist(defaultKs)
     val results = spark.sql(s"DESCRIBE NAMESPACE EXTENDED $defaultKs").collect()
     val properties = results.filter(_.getString(0) == "Properties").head.getString(1)
-    properties should include("SimpleStrategy")
-    properties should include("replication_factor,5")
+    properties should include("NetworkTopologyStrategy")
+    properties should include(s"$defaultDatacenter,1")
     properties should include("durable_writes,true")
   }
 
   it should "alter a keyspace" in {
     dropKeyspace(defaultKs)
     waitForKeyspaceToExist(defaultKs, false)
-    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     waitForKeyspaceToExist(defaultKs)
-    spark.sql(s"ALTER NAMESPACE $defaultKs SET DBPROPERTIES (replication_factor='2')")
+    spark.sql(s"ALTER NAMESPACE $defaultKs SET DBPROPERTIES (durable_writes='false')")
     eventually {
-      getMetadata().getKeyspace(defaultKs).get().getReplication.get("replication_factor") shouldBe ("2")
+      getMetadata().getKeyspace(defaultKs).get().isDurableWrites shouldBe false
     }
   }
 
   it should "refuse to alter a keyspace with a bad replication class" in {
     dropKeyspace(defaultKs)
     waitForKeyspaceToExist(defaultKs, false)
-    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     waitForKeyspaceToExist(defaultKs)
     intercept[CassandraCatalogException] {
       spark.sql(s"ALTER NAMESPACE $defaultKs SET DBPROPERTIES (class='2')")
@@ -125,7 +124,7 @@ class CassandraCatalogNamespaceSpec extends CassandraCatalogSpecBase {
   }
 
   it should "drop a keyspace" in {
-    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (class='SimpleStrategy',replication_factor='5')")
+    spark.sql(s"CREATE DATABASE IF NOT EXISTS $defaultKs WITH DBPROPERTIES (${networkTopologyDbProperties()})")
     waitForKeyspaceToExist(defaultKs)
     spark.sql(s"DROP DATABASE $defaultKs")
     waitForKeyspaceToExist(defaultKs, false)

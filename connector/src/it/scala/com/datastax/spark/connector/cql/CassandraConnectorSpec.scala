@@ -34,8 +34,6 @@ class CassandraConnectorSpec extends SparkCassandraITFlatSpecBase with DefaultCl
 
   override lazy val conn = CassandraConnector(defaultConf)
 
-  val createKeyspaceCql = keyspaceCql(ks)
-
   "A CassandraConnector" should "connect to Cassandra with native protocol" in {
     conn.withSessionDo { session =>
       assert(session.isClosed === false)
@@ -73,7 +71,7 @@ class CassandraConnectorSpec extends SparkCassandraITFlatSpecBase with DefaultCl
 
   it should "run queries" in {
     conn.withSessionDo { session =>
-      session.execute(createKeyspaceCql)
+      session.execute(keyspaceCql(session, ks))
       session.execute(s"DROP TABLE IF EXISTS $ks.simple_query")
       session.execute(s"CREATE TABLE $ks.simple_query (key INT PRIMARY KEY, value TEXT)")
       session.execute(s"INSERT INTO $ks.simple_query(key, value) VALUES (1, 'value')")
@@ -140,7 +138,7 @@ class CassandraConnectorSpec extends SparkCassandraITFlatSpecBase with DefaultCl
     val originalSize = sessionCache.cache.size
 
     CassandraConnector(sc.getConf).withSessionDo { session =>
-      session.execute(createKeyspaceCql)
+      session.execute(keyspaceCql(session, ks))
       session.execute(s"CREATE TABLE IF NOT EXISTS $ks.pair (x int, y int, PRIMARY KEY (x))")
     }
     for (trial <- 1 to 4) {
@@ -280,5 +278,4 @@ class CassandraConnectorSpec extends SparkCassandraITFlatSpecBase with DefaultCl
 
 
 }
-
 

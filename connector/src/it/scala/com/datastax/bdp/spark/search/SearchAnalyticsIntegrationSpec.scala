@@ -65,11 +65,7 @@ class SearchAnalyticsIntegrationSpec extends SparkCassandraITFlatSpecBase with D
       conn.withSessionDo { session =>
 
         val executor = getExecutor(session)
-        session.execute(
-          s"""CREATE KEYSPACE IF NOT EXISTS $ks
-             |WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }
-            """
-          .stripMargin)
+        session.execute(keyspaceCql(session, ks))
       awaitAll(
         Future(
           session.execute(

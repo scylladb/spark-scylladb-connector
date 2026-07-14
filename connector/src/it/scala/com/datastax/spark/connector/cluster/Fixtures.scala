@@ -21,6 +21,7 @@ package com.datastax.spark.connector.cluster
 import java.io.IOException
 import java.net.{InetAddress, InetSocketAddress, Socket}
 
+import com.datastax.oss.driver.api.core.Version
 import com.datastax.spark.connector.ccm.CcmConfig
 import com.datastax.spark.connector.cql.CassandraConnectorConf._
 import com.datastax.spark.connector.cql.DefaultAuthConfFactory
@@ -180,9 +181,9 @@ trait AuthCluster extends SingleClusterFixture {
         "authentication_options.enabled" -> "true"
       )))
     } else if (defaultConfig.scyllaEnabled) {
-      Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ Map(
-        "authenticator" -> "PasswordAuthenticator"
-      )))
+      val authConfig = Map("authenticator" -> "PasswordAuthenticator") ++
+        AuthCluster.scyllaSuperuserConfig(defaultConfig.version)
+      Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ authConfig))
     } else {
       if (defaultConfig.getCassandraVersion.compareTo(CcmConfig.V5_0_0) >= 0) {
         Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ Map(
@@ -203,6 +204,20 @@ trait AuthCluster extends SingleClusterFixture {
 }
 
 object AuthCluster {
+  private val ScyllaDefaultSuperuserRemoved: Version = Version.parse("2026.2.0")
+
+  private val DefaultSuperuserSaltedPassword: String =
+    "$2a$10$79xtMPlalUywUIkO0KeGd.QoJLZJ9ADLSo.Y4.SABCKAnOIGbluc6"
+
+  def scyllaSuperuserConfig(version: Version): Map[String, String] =
+    if (version.compareTo(ScyllaDefaultSuperuserRemoved) >= 0) {
+      Map(
+        "auth_superuser_name" -> "cassandra",
+        "auth_superuser_salted_password" -> DefaultSuperuserSaltedPassword)
+    } else {
+      Map.empty
+    }
+
   def defaultConnectionParameters(): Map[String, String] = {
     Map(
       DefaultAuthConfFactory.UserNameParam.name -> "cassandra",

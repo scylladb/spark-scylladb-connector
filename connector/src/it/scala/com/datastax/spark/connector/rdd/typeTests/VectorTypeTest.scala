@@ -61,10 +61,7 @@ abstract class VectorTypeTest[
 
   override def beforeClass() {
     conn.withSessionDo { session =>
-      session.execute(
-        s"""CREATE KEYSPACE IF NOT EXISTS $ks
-           |WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }"""
-          .stripMargin)
+      session.execute(keyspaceCql(session, ks))
     }
   }
 
@@ -245,4 +242,3 @@ class DoubleVectorTypeTest extends VectorTypeTest[Double, java.lang.Double, Doub
 }
 
 case class DoubleVectorItem(id: Int, v: Seq[Double])
-

@@ -111,8 +111,7 @@ class CassandraTableScanRDDSpec extends SparkCassandraITFlatSpecBase with Defaul
 
       val executor = getExecutor(session)
 
-      session.execute(s"CREATE KEYSPACE IF NOT EXISTS $ks " +
-        s"WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }")
+      session.execute(keyspaceCql(session, ks))
 
       session.execute(s"CREATE TABLE $ks.$tableName(key int primary key, value text)")
       val st = session.prepare(s"INSERT INTO $ks.$tableName(key, value) VALUES(?, ?)")

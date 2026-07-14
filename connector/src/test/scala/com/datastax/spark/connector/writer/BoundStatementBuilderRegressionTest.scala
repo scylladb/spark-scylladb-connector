@@ -21,7 +21,7 @@ package com.datastax.spark.connector.writer
 import java.nio.ByteBuffer
 import java.util.{Collections => JCollections}
 
-import com.datastax.oss.driver.api.core.{CqlIdentifier, ProtocolVersion}
+import com.datastax.oss.driver.api.core.{CqlIdentifier, ProtocolVersion, RequestRoutingType}
 import com.datastax.oss.driver.api.core.`type`.codec.registry.CodecRegistry
 import com.datastax.oss.driver.api.core.cql.{ColumnDefinition, ColumnDefinitions, PreparedStatement}
 import com.datastax.oss.driver.internal.core.cql.{DefaultColumnDefinition, DefaultColumnDefinitions, DefaultPreparedStatement}
@@ -66,7 +66,7 @@ class BoundStatementBuilderRegressionTest {
       false,
       CodecRegistry.DEFAULT,
       ProtocolVersion.DEFAULT,
-      false)
+      RequestRoutingType.REGULAR)
   }
 
   @Test

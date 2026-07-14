@@ -209,6 +209,13 @@ trait SparkCassandraITSpecBase
   /** Returns true if running against Scylla */
   def isScylla: Boolean = CcmConfig().scyllaEnabled
 
+  /** Returns the expected default sstable compression class (short name) for the current database.
+    * Configurable via the `ccm.sstable_compression` system property or `CCM_SSTABLE_COMPRESSION`
+    * environment variable. Defaults to "LZ4Compressor".
+    * Set to "LZ4DictCompression" when testing against Scylla LATEST which uses a different default.
+    */
+  def defaultSSTableCompression: String = CcmConfig().defaultSSTableCompression
+
   /** Skips the given test if the cluster is Scylla.
     * @param issue Issue reference in format "scylladb/scylladb#NNN: description" or
     *              "scylladb/spark-scylladb-connector#NNN: description" explaining why the test is skipped
@@ -283,17 +290,26 @@ trait SparkCassandraITSpecBase
   protected def microsAtYear(year: Int): Long =
     ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, ZoneId.of("UTC")).toInstant.toEpochMilli * 1000L
 
-  def keyspaceCql(name: String = ks) =
+  protected def testDatacenter(session: CqlSession): String =
+    session.getMetadata.getNodes.values().asScala
+      .flatMap(node => Option(node.getDatacenter))
+      .headOption
+      .getOrElse(throw new IllegalStateException("Could not resolve test cluster datacenter from driver metadata"))
+
+  protected def keyspaceReplicationCql(session: CqlSession, rf: Int = 1): String =
+    s"{ 'class': 'NetworkTopologyStrategy', '${testDatacenter(session)}': $rf }"
+
+  def keyspaceCql(session: CqlSession, name: String = ks, rf: Int = 1) =
     s"""
        |CREATE KEYSPACE IF NOT EXISTS $name
-       |WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1 }
+       |WITH REPLICATION = ${keyspaceReplicationCql(session, rf)}
        |AND durable_writes = false
        |""".stripMargin
 
   def createKeyspace(session: CqlSession, name: String = ks): Unit = {
     val ks_ex = getExecutor(session)
     ks_ex.execute(newInstance(s"DROP KEYSPACE IF EXISTS $name"))
-    ks_ex.execute(newInstance(keyspaceCql(name)))
+    ks_ex.execute(newInstance(keyspaceCql(session, name)))
   }
 
   /**
