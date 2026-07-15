@@ -99,3 +99,20 @@ jobs:
         run: |
           git status && git log -3 scylla-4.x
           git push origin scylla-4.x --follow-tags -v
+
+      - name: Create GitHub release
+        if: inputs.dry-run == false
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_TAG=$(git describe --tags --abbrev=0 --match 'v*')
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "GitHub release ${RELEASE_TAG} already exists"
+            exit 0
+          fi
+
+          gh release create "${RELEASE_TAG}" \
+            --title "${RELEASE_TAG}" \
+            --generate-notes \
+            --verify-tag
