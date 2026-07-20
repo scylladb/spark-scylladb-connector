@@ -20,6 +20,7 @@ package com.datastax.spark.connector.rdd.partitioner
 
 import java.net.InetAddress
 
+import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.spark.connector.cql.CassandraConnector
 import com.datastax.spark.connector.util.DriverUtil.{toName, toOption}
 import scala.jdk.CollectionConverters._
@@ -44,7 +45,10 @@ class NodeAddresses(conn: CassandraConnector) extends Serializable {
       val nativeTransportAddressColumnName = transportAddressColumn.map(c => toName(c.getName)).getOrElse("rpc_address")
 
       // TODO: fetch information about the local node from system.local, when CASSANDRA-9436 is done
-      val rs = session.execute(s"SELECT $nativeTransportAddressColumnName, $listenAddressColumnName FROM $table")
+      val statement = SimpleStatement
+        .newInstance(s"SELECT $nativeTransportAddressColumnName, $listenAddressColumnName FROM $table")
+        .setIdempotent(true)
+      val rs = session.execute(statement)
       for {
         row <- rs.all().asScala
         nativeTransportAddress <- Option(row.getInetAddress(nativeTransportAddressColumnName))

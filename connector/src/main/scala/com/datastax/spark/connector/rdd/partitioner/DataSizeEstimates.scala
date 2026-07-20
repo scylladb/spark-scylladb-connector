@@ -19,7 +19,7 @@
 package com.datastax.spark.connector.rdd.partitioner
 
 import com.datastax.spark.connector.util.Logging
-import com.datastax.oss.driver.api.core.cql.SimpleStatementBuilder
+import com.datastax.oss.driver.api.core.cql.{SimpleStatement, SimpleStatementBuilder}
 import com.datastax.oss.driver.api.core.servererrors.InvalidQueryException
 import com.datastax.spark.connector.cql.CassandraConnector
 import com.datastax.spark.connector.rdd.partitioner.dht.{Token, TokenFactory}
@@ -55,10 +55,14 @@ class DataSizeEstimates[V, T <: Token[V]](
     conn.withSessionDo { session =>
       try {
         {
-          val rs = session.execute(new SimpleStatementBuilder(
+          val statement = new SimpleStatementBuilder(
             "SELECT range_start, range_end, partitions_count, mean_partition_size " +
               "FROM system.size_estimates " +
-              "WHERE keyspace_name = ? AND table_name = ?").addPositionalValues(keyspaceName, tableName).build())
+              "WHERE keyspace_name = ? AND table_name = ?")
+            .addPositionalValues(keyspaceName, tableName)
+            .build()
+            .setIdempotent(true)
+          val rs = session.execute(statement)
 
           for (row <- rs.all().asScala) yield TokenRangeSizeEstimate(
             rangeStart = tokenFactory.tokenFromString(row.getString("range_start")),
@@ -121,9 +125,12 @@ object DataSizeEstimates {
 
     conn.withSessionDo { session =>
       def hasSizeEstimates: Boolean = {
-        session.execute(
-          s"SELECT * FROM system.size_estimates " +
-            s"WHERE keyspace_name = '$keyspaceName' AND table_name = '$tableName'").all().asScala.nonEmpty
+        val statement = SimpleStatement
+          .newInstance(
+            s"SELECT * FROM system.size_estimates " +
+              s"WHERE keyspace_name = '$keyspaceName' AND table_name = '$tableName'")
+          .setIdempotent(true)
+        session.execute(statement).all().asScala.nonEmpty
       }
 
       val startTime = System.currentTimeMillis()

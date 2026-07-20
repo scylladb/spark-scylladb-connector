@@ -128,6 +128,7 @@ while the application is running.</td>
   <td>60</td>
   <td>Number of times to retry a timed-out query
 Setting this to -1 means unlimited retries
+This configures the Java driver retry policy, not connector-level read request retry.
       </td>
 </tr>
 <tr>
@@ -335,6 +336,41 @@ columname will be used to set the writetime for that row.</td>
   <td><code>spark.cassandra.concurrent.reads</code></td>
   <td>512</td>
   <td>Sets read parallelism for joinWithCassandra tables</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.input.connectorRetry.backoff.initialDelayMS</code></td>
+  <td>1000</td>
+  <td>Initial delay in milliseconds for connector-level read retries.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.input.connectorRetry.backoff.jitterFactor</code></td>
+  <td>0.2</td>
+  <td>Jitter factor for connector-level read retry backoff, between 0.0 and 1.0.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.input.connectorRetry.backoff.maxDelayMS</code></td>
+  <td>5000</td>
+  <td>Maximum delay in milliseconds for connector-level read retries.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.input.connectorRetry.backoff.multiplier</code></td>
+  <td>2.0</td>
+  <td>Multiplier used by exponential connector-level read retry backoff.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.input.connectorRetry.backoff.type</code></td>
+  <td>exponential</td>
+  <td>Backoff type for connector-level read retries. Valid values are const and exponential.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.input.connectorRetry.maxRetries</code></td>
+  <td>3</td>
+  <td>Maximum number of connector-level retries for failed read requests. Set to 0 to disable connector-level read retries. This is separate from the Java driver retry policy configured by spark.cassandra.query.retry.count.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.input.connectorRetry.on</code></td>
+  <td>com.datastax.oss.driver.api.core.DriverTimeoutException,com.datastax.oss.driver.api.core.servererrors.OverloadedException</td>
+  <td>Comma-separated fully qualified exception class names retried by connector-level read retry. Retries are attempted only for explicitly idempotent statements.</td>
 </tr>
 <tr>
   <td><code>spark.cassandra.input.consistency.level</code></td>

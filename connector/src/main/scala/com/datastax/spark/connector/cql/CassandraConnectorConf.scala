@@ -243,6 +243,7 @@ object CassandraConnectorConf extends Logging {
     description =
       """Number of times to retry a timed-out query
         |Setting this to -1 means unlimited retries
+        |This configures the Java driver retry policy, not connector-level read request retry.
       """.stripMargin)
 
   val QueryRetryMaxRetriesParam = ConfigParameter[Int](
