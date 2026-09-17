@@ -21,6 +21,7 @@ package com.datastax.spark.connector.rdd
 import java.io.IOException
 
 import com.datastax.oss.driver.api.core.ConsistencyLevel
+import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.spark.connector._
 import com.datastax.spark.connector.cql.{CassandraConnector, TableDef}
 import com.datastax.spark.connector.datasource.ScanHelper
@@ -123,7 +124,9 @@ trait CassandraTableRowReaderProvider[R] {
   protected lazy val cassandraPartitionerClassName =
     connector.withSessionDo {
       session =>
-        session.execute("SELECT partitioner FROM system.local").one().getString(0)
+        session.execute(
+          SimpleStatement.newInstance("SELECT partitioner FROM system.local").setIdempotent(true)
+        ).one().getString(0)
     }
 
   /** Checks for existence of keyspace and table.*/

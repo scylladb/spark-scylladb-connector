@@ -1,4 +1,6 @@
 Unreleased
+ * Add configurable connector-level read request retries for idempotent scans (#117)
+ * Mark connector-generated read and metadata SELECT statements idempotent (#117)
  * Cache token-range scan prepared statements by CQL template to avoid bind arity mismatches (#110)
  * Fix batched writes carrying consistency level on child statements,
    avoiding DefaultBatchStatement warnings (#98)

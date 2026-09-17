@@ -23,7 +23,7 @@ import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.{Row, Statement}
 import com.datastax.spark.connector.CassandraRowMetadata
 import com.datastax.spark.connector.rdd.ReadConf
-import com.datastax.spark.connector.rdd.reader.PrefetchingResultSetIterator
+import com.datastax.spark.connector.rdd.reader.{ConnectorReadRequestRetrier, PrefetchingResultSetIterator}
 import com.datastax.spark.connector.util.maybeExecutingAs
 import com.datastax.spark.connector.writer.RateLimiter
 
@@ -59,10 +59,14 @@ class DefaultScanner (
   override def scan[StatementT <: Statement[StatementT]](statement: StatementT): ScanResult = {
     import com.datastax.spark.connector.util.Threads.BlockingIOExecutionContext
 
-    val rs = session.executeAsync(maybeExecutingAs(statement, readConf.executeAs))
+    val statementToExecute = maybeExecutingAs(statement, readConf.executeAs)
+    val retrier = new ConnectorReadRequestRetrier(readConf.connectorRetry)
+    val rs = retrier.executeAsync(statementToExecute, "first-page") {
+      session.executeAsync(statementToExecute)
+    }
     val scanResult = asScalaFuture(rs).map { rs =>
       val columnMetaData = CassandraRowMetadata.fromResultSet(columnNames, rs, codecRegistry)
-      val prefetchingIterator = new PrefetchingResultSetIterator(rs)
+      val prefetchingIterator = new PrefetchingResultSetIterator(rs, None, readConf.connectorRetry)
       val rateLimitingIterator = readConf.throughputMiBPS match {
         case Some(throughput) =>
           val rateLimiter = new RateLimiter((throughput * 1024 * 1024).toLong, 1024 * 1024)

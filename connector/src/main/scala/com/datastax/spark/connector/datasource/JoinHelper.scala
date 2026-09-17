@@ -289,7 +289,7 @@ object JoinHelper extends Logging {
       rowWriter.readColumnValues(elem, buffer)
       bindValue(buffer(lastCkIndex))
     }
-    boundStmt
+    boundStmt.setIdempotent(true)
   }
 
   /** Compare two CK values that might have different runtime types (e.g. Int vs Long). */

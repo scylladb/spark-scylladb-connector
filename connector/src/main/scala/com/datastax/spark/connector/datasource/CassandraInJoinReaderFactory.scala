@@ -20,10 +20,10 @@ package com.datastax.spark.connector.datasource
 
 import com.datastax.spark.connector.cql.{CassandraConnector, TableDef}
 import com.datastax.spark.connector.rdd.ReadConf
-import com.datastax.spark.connector.rdd.reader.PrefetchingResultSetIterator
+import com.datastax.spark.connector.rdd.reader.{ConnectorReadQueryExecutor, PrefetchingResultSetIterator}
 import com.datastax.spark.connector.util.Logging
 import com.datastax.spark.connector.util.Threads.BlockingIOExecutionContext
-import com.datastax.spark.connector.writer.{CassandraRowWriter, QueryExecutor}
+import com.datastax.spark.connector.writer.CassandraRowWriter
 import com.datastax.spark.connector.{CassandraRow, CassandraRowMetadata, ColumnName, RowCountRef}
 import com.google.common.util.concurrent.SettableFuture
 import org.apache.spark.sql.catalyst.InternalRow
@@ -79,7 +79,7 @@ abstract class CassandraBaseInJoinReader(
   protected val bsb = JoinHelper.getKeyBuilderStatementBuilder(session, rowWriter, preparedStatement, cqlQueryParts.whereClause)
   protected val rowMetadata = JoinHelper.getCassandraRowMetadata(session, preparedStatement, cqlQueryParts.selectedColumnRefs)
 
-  protected val queryExecutor = QueryExecutor(session, readConf.parallelismLevel, None, None, connector.conf)
+  protected val queryExecutor = ConnectorReadQueryExecutor(session, readConf, connector.conf)
   protected val maybeRateLimit = JoinHelper.maybeRateLimit(readConf)
   protected val requestsPerSecondRateLimiter = JoinHelper.requestsPerSecondRateLimiter(readConf)
 
@@ -87,9 +87,9 @@ abstract class CassandraBaseInJoinReader(
     val resultFuture = SettableFuture.create[Iterator[(CassandraRow, InternalRow)]]
     val leftSide = Iterator.continually(left)
 
-    queryExecutor.executeAsync(bsb.bind(left).executeAs(readConf.executeAs)).onComplete {
+    queryExecutor.executeAsync(bsb.bind(left).setIdempotent(true).executeAs(readConf.executeAs)).onComplete {
       case Success(rs) =>
-        val resultSet = new PrefetchingResultSetIterator(rs)
+        val resultSet = new PrefetchingResultSetIterator(rs, None, readConf.connectorRetry)
         /* This is a much less than ideal place to actually rate limit, we are buffering
         these futures this means we will most likely exceed our threshold*/
         val throttledIterator = resultSet.map(maybeRateLimit)

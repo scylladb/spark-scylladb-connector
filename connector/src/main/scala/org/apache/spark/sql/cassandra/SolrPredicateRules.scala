@@ -130,7 +130,7 @@ class SolrPredicateRules(searchOptimizationEnabled: DseSearchOptimizationSetting
 
     Try {
       CassandraConnector(sparkConf)
-        .withSessionDo(_.execute(SelectSolrSchema))
+        .withSessionDo(_.execute(SimpleStatement.newInstance(SelectSolrSchema).setIdempotent(true)))
         .one()
         .getString(0)
     } match {
@@ -400,8 +400,10 @@ class SolrPredicateRules(searchOptimizationEnabled: DseSearchOptimizationSetting
             val pagingDisabled = session.getContext.getConfig.getDefaultProfile.withInt(DefaultDriverOption.REQUEST_PAGE_SIZE, -1)
             val totalRequest = SimpleStatement.newInstance(request, s"""{"q":"*:*", $FaultTolerant}""")
               .setExecutionProfile(pagingDisabled)
+              .setIdempotent(true)
             val queryRequest = SimpleStatement.newInstance(request, solrStringNoFailoverTolerant)
               .setExecutionProfile(pagingDisabled)
+              .setIdempotent(true)
 
             val totalFuture = session.executeAsync(totalRequest)
             val queryFuture = session.executeAsync(queryRequest)//TODO THIS can be done in a more reactive way I believe

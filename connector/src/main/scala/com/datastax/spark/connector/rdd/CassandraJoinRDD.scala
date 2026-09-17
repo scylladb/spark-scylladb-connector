@@ -170,7 +170,7 @@ class CassandraJoinRDD[L, R] (
     metricsUpdater: InputMetricsUpdater
   ): Iterator[(L, R)] = {
 
-    val queryExecutor = QueryExecutor(session, readConf.parallelismLevel, None, None, connector.conf)
+    val queryExecutor = ConnectorReadQueryExecutor(session, readConf, connector.conf)
 
     def pairWithRight(left: L): SettableFuture[Iterator[(L, R)]] = {
       val resultFuture = SettableFuture.create[Iterator[(L, R)]]
@@ -180,10 +180,11 @@ class CassandraJoinRDD[L, R] (
 
       val stmt = bsb.bind(left)
         .update(_.setPageSize(readConf.fetchSizeInRows))
+        .setIdempotent(true)
         .executeAs(readConf.executeAs)
       queryExecutor.executeAsync(stmt).onComplete {
         case Success(rs) =>
-          val resultSet = new PrefetchingResultSetIterator(rs)
+          val resultSet = new PrefetchingResultSetIterator(rs, None, readConf.connectorRetry)
           val iteratorWithMetrics = resultSet.map(metricsUpdater.updateMetrics)
           val throttledIterator = iteratorWithMetrics.map(JoinHelper.maybeRateLimit(readConf))
           val rightSide = throttledIterator.map(rowReader.read(_, rowMetadata))
@@ -217,16 +218,19 @@ class CassandraJoinRDD[L, R] (
 
     import com.datastax.spark.connector.util.Threads.BlockingIOExecutionContext
 
-    val queryExecutor = QueryExecutor(session, readConf.parallelismLevel, None, None, connector.conf)
+    val queryExecutor = ConnectorReadQueryExecutor(session, readConf, connector.conf)
     val codecRegistry = session.getContext.getCodecRegistry
     val ctx = InClauseContext(session)
 
     def pairSingleWithRight(left: L): SettableFuture[Iterator[(L, R)]] = {
       val resultFuture = SettableFuture.create[Iterator[(L, R)]]
-      val stmt = bsb.bind(left).update(_.setPageSize(readConf.fetchSizeInRows)).executeAs(readConf.executeAs)
+      val stmt = bsb.bind(left)
+        .update(_.setPageSize(readConf.fetchSizeInRows))
+        .setIdempotent(true)
+        .executeAs(readConf.executeAs)
       queryExecutor.executeAsync(stmt).onComplete {
         case Success(rs) =>
-          val it = new PrefetchingResultSetIterator(rs).map(metricsUpdater.updateMetrics)
+          val it = new PrefetchingResultSetIterator(rs, None, readConf.connectorRetry).map(metricsUpdater.updateMetrics)
           val throttled = it.map(JoinHelper.maybeRateLimit(readConf))
           resultFuture.set(Iterator.continually(left).zip(throttled.map(rowReader.read(_, rowMetadata))))
         case Failure(t) => resultFuture.setException(t)
@@ -246,7 +250,7 @@ class CassandraJoinRDD[L, R] (
       val richStmt = new RichBoundStatementWrapper(boundStmt).executeAs(readConf.executeAs)
       queryExecutor.executeAsync(richStmt).onComplete {
         case Success(rs) =>
-          val it = new PrefetchingResultSetIterator(rs).map(metricsUpdater.updateMetrics)
+          val it = new PrefetchingResultSetIterator(rs, None, readConf.connectorRetry).map(metricsUpdater.updateMetrics)
           val throttled = it.map(JoinHelper.maybeRateLimit(readConf))
           resultFuture.set(ctx.matchResultsToLefts(throttled, ckValueToLefts, rowMetadata, rowReader))
         case Failure(t) => resultFuture.setException(t)
