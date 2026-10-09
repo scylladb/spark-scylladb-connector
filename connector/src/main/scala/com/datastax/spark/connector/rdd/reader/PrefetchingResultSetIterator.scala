@@ -18,11 +18,12 @@
 
 package com.datastax.spark.connector.rdd.reader
 
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{CompletionStage, TimeUnit}
 
 import com.codahale.metrics.Timer
 import com.datastax.bdp.util.ScalaJavaUtil
-import com.datastax.oss.driver.api.core.cql.{AsyncResultSet, Row}
+import com.datastax.oss.driver.api.core.cql.{AsyncResultSet, Row, Statement}
+import com.datastax.spark.connector.rdd.ConnectorReadRetryConf
 import com.datastax.spark.connector.util.Threads.BlockingIOExecutionContext
 
 import scala.concurrent.duration.Duration
@@ -37,15 +38,27 @@ import scala.concurrent.{Await, Future}
   * @param resultSet result set obtained from the Java driver
   * @param timer     a Codahale timer to optionally gather the metrics of fetching time
   */
-class PrefetchingResultSetIterator(resultSet: AsyncResultSet, timer: Option[Timer] = None) extends Iterator[Row] {
+class PrefetchingResultSetIterator(
+    resultSet: AsyncResultSet,
+    timer: Option[Timer],
+    connectorRetryConf: ConnectorReadRetryConf = ConnectorReadRetryConf()) extends Iterator[Row] {
+
+  def this(resultSet: AsyncResultSet) =
+    this(resultSet, None, ConnectorReadRetryConf())
+
+  def this(resultSet: AsyncResultSet, timer: Option[Timer]) =
+    this(resultSet, timer, ConnectorReadRetryConf())
+
+  private val retrier = new ConnectorReadRequestRetrier(connectorRetryConf)
+
   private var currentIterator = resultSet.currentPage().iterator()
   private var currentResultSet = resultSet
   private var nextResultSet = fetchNextPage()
 
   private def fetchNextPage(): Option[Future[AsyncResultSet]] = {
     if (currentResultSet.hasMorePages) {
-      val t0 = System.nanoTime();
-      val next = ScalaJavaUtil.asScalaFuture(currentResultSet.fetchNextPage())
+      val t0 = System.nanoTime()
+      val next = ScalaJavaUtil.asScalaFuture(fetchNextPageWithRetry())
       timer.foreach { t =>
         next.foreach(_ => t.update(System.nanoTime() - t0, TimeUnit.NANOSECONDS))
       }
@@ -53,6 +66,16 @@ class PrefetchingResultSetIterator(resultSet: AsyncResultSet, timer: Option[Time
     } else
       None
   }
+
+  private def fetchNextPageWithRetry(): CompletionStage[AsyncResultSet] =
+    currentResultSet.getExecutionInfo.getRequest match {
+      case statement: Statement[_] =>
+        retrier.executeAsync(statement.asInstanceOf[Statement[_ <: Statement[_]]], "next-page") {
+          currentResultSet.fetchNextPage()
+        }
+      case _ =>
+        currentResultSet.fetchNextPage()
+    }
 
   private def maybePrefetch(): Unit = {
     if (!currentIterator.hasNext && currentResultSet.hasMorePages) {

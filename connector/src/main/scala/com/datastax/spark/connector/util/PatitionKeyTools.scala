@@ -21,7 +21,7 @@ package com.datastax.spark.connector.util
 import java.io.IOException
 
 import com.datastax.oss.driver.api.core.CqlSession
-import com.datastax.oss.driver.api.core.cql.PreparedStatement
+import com.datastax.oss.driver.api.core.cql.{PreparedStatement, SimpleStatement}
 import com.datastax.spark.connector.cql.{ColumnDef, TableDef}
 import com.datastax.spark.connector.util.Quote._
 
@@ -42,7 +42,10 @@ object PatitionKeyTools {
 
   private[connector] def prepareDummyStatement(session: CqlSession, tableDef: TableDef): PreparedStatement = {
     try {
-      session.prepare(querySelectUsingOnlyPartitionKeys(tableDef))
+      val statement = SimpleStatement
+        .newInstance(querySelectUsingOnlyPartitionKeys(tableDef))
+        .setIdempotent(true)
+      session.prepare(statement)
     }
     catch {
       case t: Throwable =>

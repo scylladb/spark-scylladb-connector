@@ -18,6 +18,7 @@
 
 package com.datastax.spark.connector.rdd.partitioner.dht
 
+import com.datastax.oss.driver.api.core.cql.SimpleStatement
 import com.datastax.spark.connector.cql.CassandraConnector
 
 import scala.language.existentials
@@ -114,12 +115,13 @@ object TokenFactory {
 
   def forSystemLocalPartitioner(connector: CassandraConnector): TokenFactory[V, T] = {
     val partitionerClassName = connector.withSessionDo { session =>
-      session.execute("SELECT partitioner FROM system.local").one().getString(0)
+      session.execute(
+        SimpleStatement.newInstance("SELECT partitioner FROM system.local").setIdempotent(true)
+      ).one().getString(0)
     }
     forCassandraPartitioner(partitionerClassName)
   }
 }
-
 
 
 

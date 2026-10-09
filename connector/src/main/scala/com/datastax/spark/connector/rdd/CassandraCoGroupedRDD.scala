@@ -37,7 +37,7 @@ import com.datastax.spark.connector.CassandraRowMetadata
 import com.datastax.spark.connector.cql.{CassandraConnector, ColumnDef, Schema}
 import com.datastax.spark.connector.rdd.CassandraCoGroupedRDD._
 import com.datastax.spark.connector.rdd.partitioner.{CassandraPartition, CqlTokenRange, NodeAddresses}
-import com.datastax.spark.connector.rdd.reader.{PrefetchingResultSetIterator, RowReader}
+import com.datastax.spark.connector.rdd.reader.{ConnectorReadRequestRetrier, PrefetchingResultSetIterator, RowReader}
 import com.datastax.spark.connector.types.ColumnType
 import com.datastax.spark.connector.util.Quote._
 import com.datastax.spark.connector.util.{CountingIterator, MultiMergeJoinIterator, NameTools}
@@ -178,10 +178,13 @@ class CassandraCoGroupedRDD[T](
 
     import com.datastax.spark.connector.util.Threads.BlockingIOExecutionContext
 
-    val fetchResult = asScalaFuture(session.executeAsync(stmt)).map { rs =>
+    val retrier = new ConnectorReadRequestRetrier(fromRDD.readConf.connectorRetry)
+    val fetchResult = asScalaFuture(retrier.executeAsync(stmt, "first-page") {
+      session.executeAsync(stmt)
+    }).map { rs =>
       val columnNames = fromRDD.selectedColumnRefs.map(_.selectedAs).toIndexedSeq ++ Seq(TokenColumn)
       val columnMetaData = CassandraRowMetadata.fromResultSet(columnNames, rs, session.getContext.getCodecRegistry)
-      val iterator = new PrefetchingResultSetIterator(rs)
+      val iterator = new PrefetchingResultSetIterator(rs, None, fromRDD.readConf.connectorRetry)
       val iteratorWithMetrics = iterator.map(inputMetricsUpdater.updateMetrics)
       logDebug(s"Row iterator for range $range obtained successfully.")
       (columnMetaData, iteratorWithMetrics)
