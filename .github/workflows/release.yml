@@ -55,6 +55,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Preserve release capture helper
+        run: |
+          set -euo pipefail
+          guard_dir="${RUNNER_TEMP}/spark-release-guard"
+          mkdir -p "$guard_dir"
+          cp scripts/release/guard.py "$guard_dir/guard.py"
+          echo "RELEASE_GUARD=$guard_dir/guard.py" >> "$GITHUB_ENV"
+
       - name: Checkout Code One Commit Before ${{ inputs.target-tag }}
         if: inputs.target-tag != 'scylla-4.x'
         env:
@@ -65,14 +73,17 @@ jobs:
         if: inputs.target-tag == 'scylla-4.x'
         run: git switch -C scylla-4.x origin/scylla-4.x
 
+      - name: Check selected release log capture
+        run: python3 "$RELEASE_GUARD" check
+
       - name: Set up Java
-        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: sbt
           gpg-private-key: ${{ secrets.PGP_SECRET }}
-          gpg-passphrase: PGP_PASSPHRASE
+          gpg-passphrase-env-var: PGP_PASSPHRASE
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
 

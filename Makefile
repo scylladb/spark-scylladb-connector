@@ -6,7 +6,7 @@ SHELL := bash
         resolve-cassandra-version resolve-scylla-version resolve-scala-version \
         download-cassandra download-scylla install-cassandra-ccm install-scylla-ccm \
         generate-test-matrix lint lint-fix generate-test-certs \
-        release-prepare release release-dry-run checkout-one-commit-before
+        release-prepare release release-dry-run checkout-one-commit-before release-log-safety
 
 MAKEFILE_PATH := $(abspath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 SCYLLA_VERSION ?= LATEST
@@ -308,14 +308,19 @@ clean: ## Clean build artifacts and TLS certs
 # Release variables
 RELEASE_SKIP_TESTS ?=
 RELEASE_TARGET_TAG ?=
-RELEASE_LOG_DIR := /tmp/spark-connector-release-logs
+RELEASE_LOG_DIR ?= /tmp/spark-connector-release-logs
+RELEASE_GUARD ?= $(MAKEFILE_PATH)/scripts/release/guard.py
+export RELEASE_LOG_DIR
+
+release-log-safety: ## Check release recipes before importing credentials
+	@python3 "$(RELEASE_GUARD)" check
 
 .require-release-env:
-	@if [[ -z "${SONATYPE_USERNAME}" ]]; then
+	@if [[ -z "$${SONATYPE_USERNAME}" ]]; then
 		echo "SONATYPE_USERNAME is empty"
 		exit 1
 	fi
-	if [[ -z "${SONATYPE_PASSWORD}" ]]; then
+	if [[ -z "$${SONATYPE_PASSWORD}" ]]; then
 		echo "SONATYPE_PASSWORD is empty"
 		exit 1
 	fi
@@ -344,28 +349,26 @@ release: .require-release-env ## Publish release to Maven Central
 	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
 	echo "Performing release for tag $$RELEASE_TAG"
 	git checkout "$$RELEASE_TAG"
-	mkdir -p "$(RELEASE_LOG_DIR)"
-	SBT_CMDS="+publishSigned sonaUpload sonaRelease"
+	SBT_ARGS=(+publishSigned sonaUpload sonaRelease)
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
-		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
+		SBT_ARGS=("set ThisBuild / test := {}" "$${SBT_ARGS[@]}")
 	fi
-	eval $(SBT_BIN) $$SBT_CMDS > >(tee $(RELEASE_LOG_DIR)/stdout.log) 2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+	python3 "$(RELEASE_GUARD)" run "$(SBT_BIN)" "$${SBT_ARGS[@]}"
 
 release-dry-run: .require-release-env ## Dry-run release (no Maven Central publish)
 	@RELEASE_TAG=$$(git describe --tags --abbrev=0 --match 'v*')
 	echo "Performing dry-run release for tag $$RELEASE_TAG"
 	git checkout "$$RELEASE_TAG"
-	mkdir -p "$(RELEASE_LOG_DIR)"
-	SBT_CMDS="+publishSigned sonaUpload"
+	SBT_ARGS=(+publishSigned sonaUpload)
 	if [[ "${RELEASE_SKIP_TESTS}" == "true" ]] || [[ "${RELEASE_SKIP_TESTS}" == "1" ]]; then
-		SBT_CMDS="\"set ThisBuild / test := {}\" $$SBT_CMDS"
+		SBT_ARGS=("set ThisBuild / test := {}" "$${SBT_ARGS[@]}")
 	fi
-	eval $(SBT_BIN) $$SBT_CMDS > >(tee $(RELEASE_LOG_DIR)/stdout.log) 2> >(tee $(RELEASE_LOG_DIR)/stderr.log)
+	python3 "$(RELEASE_GUARD)" run "$(SBT_BIN)" "$${SBT_ARGS[@]}"
 
 checkout-one-commit-before:
 	@if [[ "${RELEASE_TARGET_TAG}" == v* ]]; then
 		echo "Checking out one commit before ${RELEASE_TARGET_TAG}"
 		git fetch --prune --unshallow || git fetch --prune || true
-		git checkout ${RELEASE_TARGET_TAG}~1
-		git tag -d ${RELEASE_TARGET_TAG}
+		git checkout "${RELEASE_TARGET_TAG}~1"
+		git tag -d "${RELEASE_TARGET_TAG}"
 	fi
