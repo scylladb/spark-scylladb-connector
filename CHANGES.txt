@@ -1,4 +1,5 @@
 Unreleased
+ * Sanitize retained SBT release stdout and stderr before console or artifact writes
  * Cache token-range scan prepared statements by CQL template to avoid bind arity mismatches (#110)
  * Fix batched writes carrying consistency level on child statements,
    avoiding DefaultBatchStatement warnings (#98)

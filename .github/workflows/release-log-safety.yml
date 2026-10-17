@@ -1,0 +1,29 @@
+name: Release log safety
+
+on:
+  pull_request:
+    paths:
+      - Makefile
+      - scripts/release/**
+      - .github/workflows/release.yml
+      - .github/workflows/release-log-safety.yml
+  push:
+    branches: [scylla-4.x]
+    paths:
+      - Makefile
+      - scripts/release/**
+      - .github/workflows/release.yml
+      - .github/workflows/release-log-safety.yml
+
+permissions:
+  contents: read
+
+jobs:
+  release-log-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Check release recipes
+        run: python3 scripts/release/guard.py check
+      - name: Test capture with synthetic credentials and fake SBT
+        run: python3 -m unittest discover -s scripts/release -p 'test_*.py' -v
