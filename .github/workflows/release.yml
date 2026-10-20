@@ -55,6 +55,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Preserve repository signing policy
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/release-signing-policy"
+          cp scripts/release/signing.py scripts/release/publisher.asc "$RUNNER_TEMP/release-signing-policy/"
+          echo "RELEASE_SIGNING_HELPER=$RUNNER_TEMP/release-signing-policy/signing.py" >> "$GITHUB_ENV"
+
       - name: Preserve release capture helper
         run: |
           set -euo pipefail
@@ -76,6 +82,12 @@ jobs:
       - name: Check selected release log capture
         run: python3 "$RELEASE_GUARD" check
 
+      - name: Require the selected target to support repository signing
+        run: |
+          grep -Fq 'Global / PgpKeys.pgpSelectPassphrase := None' build.sbt
+          grep -Fq 'Global / PgpKeys.pgpSigningKey := Some("1DEE56548AA691E39E717034650D11682F0D8040!")' build.sbt
+          grep -Fq 'RELEASE_GPG_WRAPPER' build.sbt
+
       - name: Set up Java
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
@@ -87,13 +99,16 @@ jobs:
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
 
-      - name: Configure Git user
-        run: |
-          git config user.name "ScyllaDB Promoter"
-          git config user.email "github-promoter@scylladb.com"
+      - name: Configure protected repository signing subkey
+        env:
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
+        run: python3 "$RELEASE_SIGNING_HELPER" configure
 
       - name: Prepare release
         run: make release-prepare
+
+      - name: Verify prepared release commits and tag with public key only
+        run: python3 "$RELEASE_SIGNING_HELPER" verify-release "$(git describe --tags --abbrev=0 --match 'v*')"
 
       - name: Recheck for open release blockers
         if: inputs.dry-run == false
@@ -172,3 +187,7 @@ jobs:
             --title "${RELEASE_TAG}" \
             --generate-notes \
             --verify-tag
+
+      - name: Remove temporary release signing files
+        if: always() && env.RELEASE_SIGNING_DIR != ''
+        run: python3 "$RELEASE_SIGNING_HELPER" cleanup
