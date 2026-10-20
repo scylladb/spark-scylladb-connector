@@ -105,6 +105,8 @@ jobs:
         run: python3 "$RELEASE_SIGNING_HELPER" configure
 
       - name: Prepare release
+        env:
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
         run: make release-prepare
 
       - name: Verify prepared release commits and tag with public key only
