@@ -36,6 +36,12 @@ Failures remain visible; unrelated labels are preserved. Cleanup is best effort:
 API outages, runner termination or cancellation can prevent it. Before/after
 reads and workflow serialization do not provide atomicity or race freedom.
 
+The marker controls GitHub release-note presentation. Local Jira add/remove
+callers exclude this whole logical label, including case variants, while other
+label and PR events retain their routes. Default `GITHUB_TOKEN` labeling does
+not trigger those event workflows; manual label changes can. Existing Jira
+copies are not cleaned, and other synchronization paths may restore old metadata.
+
 ## Before publishing new notes
 
 Publication remains asynchronous. There is no automated release/classifier
