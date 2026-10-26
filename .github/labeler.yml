@@ -1,0 +1,6 @@
+# Every filename must match this single union; guards also check prior rename paths.
+# Keep published sources, build inputs and publication/classification controls visible.
+omit-from-release-notes:
+  - changed-files:
+      - all-globs-to-all-files:
+          - "{connector/src/test/**,connector/src/it/**,driver/src/test/**,driver/src/it/**,test-support/src/test/**,test-support/src/it/**,publishableAssembly/src/test/**,publishableAssembly/src/it/**,doc/*.md,.github/ISSUE_TEMPLATE/**,.github/pull_request_template.md,.github/scripts/*.test.cjs,.github/workflows/integration-tests.yml,.github/workflows/codeql.yml,.github/workflows/dependency-updates.yml,.github/workflows/release-log-safety.yml,.github/workflows/release-notes-tests.yml,scripts/release/test_*.py,README.md,CHANGES.txt,TODO.md,rootdoc.txt,.gitignore,scripts/release/README.md,scripts/generate-test-certs.sh,testing/scripts/mac-localhost-aliases.sh}"
