@@ -21,8 +21,11 @@ Labeling runs on PR creation, updates, reopening, editing and closing, including
 merges. Runs for the same PR are serialized, including manual backfills. The
 workflow checks out repository tooling at the event revision, never PR head
 code. Manual runs must select the repository default branch (`scylla-4.x`); a
-precondition rejects other selected refs before checkout. This check documents
-supported operation; it cannot protect against replacing the workflow itself.
+precondition rejects other selected refs before checkout. The same independent
+step confirms manual targets through the PR API and trusts matching PR events.
+Only confirmed PRs can reach label cleanup; ordinary issues and failed target
+lookups receive no label writes. Confirmation survives later read or setup
+failures. This check documents supported operation; it cannot protect against replacing the workflow itself.
 
 A focused guard reads the same canonical YAML as labeler. It checks a complete
 listing of distinct filenames against the reported count, both old and new

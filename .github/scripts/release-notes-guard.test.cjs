@@ -13,6 +13,7 @@ const workflowText = readFileSync(join(__dirname, '../workflows/label-release-no
 const workflow = yaml.load(workflowText);
 const steps = workflow.jobs.classify.steps;
 const scripts = steps.filter(step => step.with?.script).map(step => step.with.script);
+const targetScript = steps.find(step => step.id === 'target').with.script;
 const collectScript = steps.find(step => step.id === 'guard').with.script;
 const verifyScript = steps.at(-1).with.script;
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -23,13 +24,14 @@ function fixture(options = {}) {
   const calls = [];
   let gets = 0;
   let listings = 0;
-  const initial = {head: {sha: 'head'}, base: {sha: 'base'}, changed_files: files.length};
+  const initial = {number: 20, head: {sha: 'head'}, base: {sha: 'base'}, changed_files: files.length};
   const github = {rest: {pulls: {
     get: async params => {
       assert.deepEqual(params, {...repo, pull_number: 20});
       calls.push('get');
       gets++;
       if (options.failGetAt === gets) throw new Error('PR lookup unavailable');
+      if (options.ordinaryIssue) throw Object.assign(new Error('Not a pull request'), {status: 404});
       return {data: {...initial, ...options.revisions?.[gets - 1]}};
     },
     listFiles: () => {}
@@ -63,7 +65,8 @@ function fixture(options = {}) {
 }
 
 async function adapter(f, hash, overrides = {}, load = () => guard) {
-  const env = {PR_NUMBER: '20', CHECKOUT_OUTCOME: 'success', INSTALL_OUTCOME: 'success',
+  const env = {PR_NUMBER: '20', CONFIRMED_PR_NUMBER: '20',
+    CHECKOUT_OUTCOME: 'success', INSTALL_OUTCOME: 'success',
     GUARD_OUTCOME: 'success', LABELER_OUTCOME: 'success', UNSAFE_RENAME: 'false',
     SNAPSHOT_HASH: hash, ...overrides};
   const logs = [];
@@ -319,21 +322,84 @@ test('merged-PR backfills load event tooling rather than the old PR base or head
   }
 });
 
-test('dispatch precondition rejects non-default refs before checkout and cleanup needs no helper', async () => {
-  assert.equal(steps[0].name, 'Require default-branch manual dispatch');
-  const run = new AsyncFunction('context', steps[0].with.script);
-  const payload = {repository: {default_branch: 'scylla-4.x'}};
-  await run({eventName: 'workflow_dispatch', ref: 'refs/heads/scylla-4.x', payload});
-  await run({eventName: 'pull_request_target', ref: 'refs/heads/release-branch', payload});
+async function confirmTarget(f, context, raw = '20') {
+  const outputs = {};
+  const run = new AsyncFunction('github', 'context', 'core', 'process', targetScript);
+  let error;
+  try {
+    await run(f.github, {...context, repo}, {setOutput: (key, value) => {
+      outputs[key] = value;
+    }}, {env: {PR_NUMBER: raw}});
+  } catch (caught) { error = caught; }
+  return {error, outputs};
+}
+
+const manualContext = {eventName: 'workflow_dispatch', ref: 'refs/heads/scylla-4.x',
+  payload: {repository: {default_branch: 'scylla-4.x'}}};
+const prContext = {eventName: 'pull_request_target',
+  payload: {pull_request: {number: 20}}};
+
+test('target precondition rejects unsupported refs and confirms trusted PR events without a read', async () => {
+  assert.equal(steps[0].id, 'target');
+  const f = fixture();
+  const confirmed = await confirmTarget(f, prContext);
+  assert.ifError(confirmed.error);
+  assert.deepEqual(confirmed.outputs, {'confirmed-pr': '20'});
+  assert.deepEqual(f.calls, []);
   for (const ref of ['refs/heads/feature', 'refs/tags/v1.2.3']) {
-    await assert.rejects(run({eventName: 'workflow_dispatch', ref, payload}), /repository default branch/);
+    const rejected = await confirmTarget(f, {...manualContext, ref});
+    assert.match(rejected.error.message, /repository default branch/);
+    assert.deepEqual(rejected.outputs, {});
   }
-  const f = fixture({labels: [label, 'unrelated']});
-  const {error} = await adapter(f, '', {CHECKOUT_OUTCOME: 'skipped', INSTALL_OUTCOME: 'skipped',
-    GUARD_OUTCOME: 'skipped', LABELER_OUTCOME: 'skipped'}, () => {throw new Error('Must not load helper');});
-  assert.match(error.message, /predecessor failed/);
-  assert.deepEqual([...f.labels], ['unrelated']);
-  assert.deepEqual(f.calls, ['remove']);
+  assert.deepEqual(f.calls, []);
+});
+
+test('ordinary issues and unconfirmed or mismatched targets never change labels', async () => {
+  for (const [options, context, raw] of [
+    [{ordinaryIssue: true}, manualContext, '20'],
+    [{failGetAt: 1}, manualContext, '20'],
+    [{revisions: [{number: 21}]}, manualContext, '20'],
+    [{}, {...prContext, payload: {pull_request: {number: 21}}}, '20'],
+    [{}, {...prContext, payload: {}}, '20'],
+    [{}, {eventName: 'issues', payload: {}}, '20'],
+    [{}, manualContext, '01']
+  ]) {
+    const f = fixture({...options, labels: [label, 'unrelated']});
+    const confirmed = await confirmTarget(f, context, raw);
+    assert.ok(confirmed.error);
+    assert.deepEqual(confirmed.outputs, {});
+    const result = await adapter(f, '', {CONFIRMED_PR_NUMBER: confirmed.outputs['confirmed-pr'],
+      GUARD_OUTCOME: 'failure'}, () => {throw new Error('Must not load helper');});
+    assert.match(result.error.message, /No confirmed pull request/);
+    assert.equal(f.calls.includes('remove'), false);
+    assert.deepEqual([...f.labels], [label, 'unrelated']);
+  }
+  for (const confirmation of ['', '21', '020']) {
+    const f = fixture({labels: [label]});
+    const result = await adapter(f, '', {CONFIRMED_PR_NUMBER: confirmation});
+    assert.match(result.error.message, /No confirmed pull request/);
+    assert.deepEqual(f.calls, []);
+  }
+});
+
+test('confirmed PRs retain dependency-free cleanup after later reads or setup fail', async () => {
+  for (const context of [prContext, manualContext]) {
+    for (const failure of ['read', 'setup', 'helper']) {
+      const f = fixture({labels: [label, 'unrelated'],
+        failGetAt: failure === 'read' ? (context === manualContext ? 2 : 1) : undefined});
+      const confirmed = await confirmTarget(f, context);
+      assert.ifError(confirmed.error);
+      assert.equal(confirmed.outputs['confirmed-pr'], '20');
+      const result = await adapter(f, '', {
+        CONFIRMED_PR_NUMBER: confirmed.outputs['confirmed-pr'],
+        ...(failure === 'setup' ? {CHECKOUT_OUTCOME: 'skipped'} : {})
+      }, failure === 'helper' ? () => {throw new Error('Helper unavailable');} : () => guard);
+      assert.ok(result.error);
+      assert.equal(f.calls.filter(call => call === 'remove').length, 1);
+      assert.deepEqual([...f.labels], ['unrelated']);
+    }
+  }
+  assert.equal(steps.at(-1).env.CONFIRMED_PR_NUMBER, '${{ steps.target.outputs.confirmed-pr }}');
 });
 
 test('deployed PR-number input reaches collection for update, merge and manual backfill events', async () => {

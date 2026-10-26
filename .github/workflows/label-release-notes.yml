@@ -27,7 +27,8 @@ jobs:
     env:
       PR_NUMBER: ${{ github.event.pull_request.number || inputs.pull-request }}
     steps:
-      - name: Require default-branch manual dispatch
+      - name: Require a confirmed PR target
+        id: target
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
@@ -35,6 +36,23 @@ jobs:
                 context.ref !== `refs/heads/${context.payload.repository.default_branch}`) {
               throw new Error('Run manual classification on the repository default branch');
             }
+            const raw = process.env.PR_NUMBER;
+            if (!/^[1-9][0-9]*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+              throw new Error('Expected a canonical positive safe PR number');
+            }
+            const number = Number(raw);
+            if (context.eventName === 'workflow_dispatch') {
+              const {data: pullRequest} = await github.rest.pulls.get({
+                ...context.repo, pull_number: number
+              });
+              if (pullRequest.number !== number) {
+                throw new Error('Expected a confirmed pull request target');
+              }
+            } else if (context.eventName !== 'pull_request_target' ||
+                       context.payload.pull_request?.number !== number) {
+              throw new Error('Expected a matching pull request event');
+            }
+            core.setOutput('confirmed-pr', raw);
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         id: checkout
         with:
@@ -64,6 +82,7 @@ jobs:
         if: always()
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
+          CONFIRMED_PR_NUMBER: ${{ steps.target.outputs.confirmed-pr }}
           CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
           INSTALL_OUTCOME: ${{ steps.install.outcome }}
           GUARD_OUTCOME: ${{ steps.guard.outcome }}
@@ -78,6 +97,9 @@ jobs:
               throw new Error('Expected a canonical positive safe PR number');
             }
             const number = Number(raw);
+            if (process.env.CONFIRMED_PR_NUMBER !== raw) {
+              throw new Error('No confirmed pull request target; refusing label changes');
+            }
             const removeLabel = async () => {
               try {
                 await github.rest.issues.removeLabel({
