@@ -18,20 +18,20 @@
 
 package com.datastax.spark.connector
 
-import com.datastax.dse.driver.api.core.auth.ProxyAuthentication
 import com.datastax.oss.driver.api.core.cql.Statement
 import com.datastax.spark.connector.cql.{CassandraConnector, Schema, TableDef}
 
 /** Useful stuff that didn't fit elsewhere. */
 package object util {
 
+  /** The ScyllaDB Java Driver removed DSE proxy execution, which `executeAs` relied on, in 4.19.2.3. */
+  private[connector] val ExecuteAsUnsupported =
+    "executeAs (DSE proxy execution) is not supported: the ScyllaDB Java Driver removed it in 4.19.2.3"
+
+  /** ReadConf and WriteConf reject `executeAs` when they are created, so `proxyUser` is always empty here. */
   def maybeExecutingAs[StatementT <: Statement[StatementT]](stmt: StatementT, proxyUser: Option[String]): StatementT = {
-    proxyUser match {
-      case Some(user) =>
-        ProxyAuthentication.executeAs(user, stmt)
-      case _ =>
-        stmt
-    }
+    if (proxyUser.isDefined) throw new UnsupportedOperationException(ExecuteAsUnsupported)
+    stmt
   }
 
   def schemaFromCassandra(

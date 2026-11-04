@@ -19,7 +19,7 @@
 package com.datastax.spark.connector.rdd
 
 import com.datastax.oss.driver.api.core.{ConsistencyLevel, DefaultConsistencyLevel}
-import com.datastax.spark.connector.util.{ConfigCheck, ConfigParameter, DeprecatedConfigParameter, Logging}
+import com.datastax.spark.connector.util.{ConfigCheck, ConfigParameter, DeprecatedConfigParameter, ExecuteAsUnsupported, Logging}
 import com.datastax.spark.connector.writer.WriteConf.{ReferenceSection, ThroughputMiBPSParam}
 import org.apache.spark.SparkConf
 
@@ -34,7 +34,9 @@ import org.apache.spark.SparkConf
   * @param taskMetricsEnabled whether or not enable task metrics updates (requires Spark 1.2+)
   * @param readsPerSec maximum read throughput allowed per single core in requests/s while
   *                                  joining an RDD with C* table (joinWithCassandraTable operation)
-  *                                  also used by enterprise integrations*/
+  *                                  also used by enterprise integrations
+  * @param executeAs no longer supported, leave it unset: any value is rejected, because the ScyllaDB Java Driver
+  *                  removed DSE proxy execution in 4.19.2.3 */
 case class ReadConf(
   splitCount: Option[Int] = None,
   splitSizeInMB: Int = ReadConf.SplitSizeInMBParam.default,
@@ -45,7 +47,10 @@ case class ReadConf(
   readsPerSec: Option[Int] = ReadConf.ReadsPerSecParam.default,
   parallelismLevel: Int = ReadConf.ParallelismLevelParam.default,
   executeAs: Option[String] = None,
-  joinInClauseSize: Int = ReadConf.JoinInClauseSizeParam.default)
+  joinInClauseSize: Int = ReadConf.JoinInClauseSizeParam.default) {
+
+  require(executeAs.isEmpty, ExecuteAsUnsupported)
+}
 
 
 object ReadConf extends Logging {

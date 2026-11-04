@@ -28,7 +28,7 @@ import com.datastax.dse.driver.api.core.DseProtocolVersion
 import com.datastax.dse.driver.api.core.config.DseDriverOption
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption._
-import com.datastax.oss.driver.api.core.config.{DriverConfigLoader, ProgrammaticDriverConfigLoaderBuilder => PDCLB}
+import com.datastax.oss.driver.api.core.config.{DriverConfigLoader, DriverExecutionProfile, ProgrammaticDriverConfigLoaderBuilder => PDCLB}
 import com.datastax.oss.driver.internal.core.connection.ExponentialReconnectionPolicy
 import com.datastax.oss.driver.internal.core.ssl.DefaultSslEngineFactory
 import com.datastax.spark.connector.rdd.ReadConf
@@ -37,6 +37,7 @@ import org.apache.spark.{SparkConf, SparkEnv, SparkFiles}
 import org.slf4j.LoggerFactory
 
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 
 /** Creates both native and Thrift connections to Cassandra.
   * The connector provides a DefaultConnectionFactory.
@@ -123,11 +124,22 @@ object DefaultConnectionFactory extends CassandraConnectionFactory {
       }
     }
 
+    // Advanced shard awareness opens each connection from a client source port that targets a shard. With client
+    // routes it is opt-in, as in the driver's ClientRoutesConfig: off unless `shardAwareness` is set. ScyllaDB Cloud
+    // private endpoints support it; a proxy that does not preserve the client source port, such as one without Proxy
+    // Protocol v2, does not. Basic shard awareness, sending requests to a connection of the right shard, works either
+    // way.
+    // The driver ignores ClientRoutesConfig.withShardAwareness as of 4.19.4.0, so the option is set here, both ways:
+    // the connector setting takes precedence over a value from application.conf or system properties.
+    def clientRoutesProperties(b: PDCLB): PDCLB =
+      conf.clientRoutes.fold(b)(routes =>
+        b.withBoolean(CONNECTION_ADVANCED_SHARD_AWARENESS_ENABLED, routes.shardAwareness))
+
     val universalProperties: Seq[PDCLB => PDCLB] =
       Seq( basicProperties, compressionProperties, localDCProperty)
 
     val appliedProperties: Seq[PDCLB => PDCLB] = conf.contactInfo match {
-      case ipConf: IpBasedContactInfo => universalProperties :+ ipBasedConnectionProperties(ipConf)
+      case ipConf: IpBasedContactInfo => universalProperties :+ ipBasedConnectionProperties(ipConf) :+ (clientRoutesProperties _)
       case other => universalProperties
     }
 
@@ -143,24 +155,57 @@ object DefaultConnectionFactory extends CassandraConnectionFactory {
 
     val builderWithContactInfo =  conf.contactInfo match {
       case ipConf: IpBasedContactInfo =>
-        ipConf.authConf.authProvider.fold(initialBuilder)(initialBuilder.withAuthProvider)
+        val builder = ipConf.authConf.authProvider.fold(initialBuilder)(initialBuilder.withAuthProvider)
           .withConfigLoader(configLoader)
+        conf.clientRoutes.fold(builder)(routes => builder.withClientRoutesConfig(routes.toDriver))
       case CloudBasedContactInfo(path, authConf) =>
+        requireNoClientRoutes(conf)
         authConf.authProvider.fold(initialBuilder)(initialBuilder.withAuthProvider)
           .withCloudSecureConnectBundle(maybeGetLocalFile(path))
           .withConfigLoader(configLoader)
       case ProfileFileBasedContactInfo(path) =>
+        requireNoClientRoutes(conf)
         //Ignore all programmatic config for now ... //todo maybe allow programmatic config here by changing the profile?
         logger.warn(s"Ignoring all programmatic configuration, only using configuration from $path")
         initialBuilder.withConfigLoader(DriverConfigLoader.fromUrl(maybeGetLocalFile(path)))
     }
 
     val appName = Option(SparkEnv.get).map(env => env.conf.getAppId).getOrElse("NoAppID")
-    builderWithContactInfo
+    val session = builderWithContactInfo
       .withApplicationName(s"Spark-Cassandra-Connector-$appName")
       .withSchemaChangeListener(new MultiplexingSchemaListener())
       .build()
+
+    try {
+      conf.clientRoutes.filter(_.verify).foreach(verifyClientRoutes(session, conf, _))
+    } catch {
+      case NonFatal(e) =>
+        session.close()
+        throw e
+    }
+    session
   }
+
+  private def verifyClientRoutes(session: CqlSession, conf: CassandraConnectorConf, routes: ClientRoutesConf): Unit =
+    if (ClientRoutesVerifier.runsOnSparkDriver) {
+      conf.localDC.orElse(policyDataCenter(session)) match {
+        case Some(localDC) => ClientRoutesVerifier.verify(session, routes, localDC)
+        case None => logger.warn("Client routes are not verified because the local datacenter is unknown.")
+      }
+    }
+
+  /** The data center that [[LocalNodeFirstLoadBalancingPolicy]] chose, possibly inferred from the client routes. */
+  private def policyDataCenter(session: CqlSession): Option[String] =
+    session.getContext.getLoadBalancingPolicy(DriverExecutionProfile.DEFAULT_NAME) match {
+      case policy: LocalNodeFirstLoadBalancingPolicy => Option(policy.localDataCenter).filter(_.nonEmpty)
+      case _ => None
+    }
+
+  /** Client routes are only supported with host/port contact points, see [[CassandraConnectorConf.fromSparkConf]]. */
+  private def requireNoClientRoutes(conf: CassandraConnectorConf): Unit =
+    if (conf.clientRoutes.isDefined)
+      throw new IllegalArgumentException(
+        s"Client routes require host/port contact points, they cannot be used with ${conf.contactInfo.endPointStr()}.")
 
   /**
     * Checks the Spark Temp work directory for the file in question, returning
@@ -235,7 +280,10 @@ object CassandraConnectionFactory {
     name = "spark.dse.continuousPagingEnabled",
     section = "Continuous Paging",
     default = true,
-    description = "Enables DSE Continuous Paging which improves scanning performance"
+    description =
+      """Deprecated, has no effect: the ScyllaDB Java Driver 4.19.2.3 and newer only negotiates OSS protocol versions,
+        |so scans never use DSE Continuous Paging. Still accepted, with a warning, so that configurations that set it
+        |remain valid.""".stripMargin
   )
 
   val deprecatedContinuousPagingParam = DeprecatedConfigParameter (

@@ -23,7 +23,7 @@ object Versions {
   val CommonsLang3    = "3.10"
   val Paranamer       = "2.8"
 
-  val ScyllaJavaDriver = "4.19.2.1"
+  val ScyllaJavaDriver = "4.19.4.0"
   val EsriGeometry        = "2.2.4"
 
   val ScalaCheck      = "1.14.0"
@@ -36,4 +36,7 @@ object Versions {
   val SolrJ           = "8.3.0"
 
   val ParallelCollections = "1.0.4"
+  // Same versions as Apache Spark 4.0.0 brings in, to avoid mixed versions on the Spark classpath
+  val CollectionCompat = "2.7.0"
+  val JodaTime         = "2.13.0"
 }

@@ -42,6 +42,15 @@ object Dependencies
       sparkCatalyst)
   }
 
+  /** Libraries the connector uses at runtime that otherwise only reach the build through Spark's "provided"
+    * dependencies, and would therefore be missing from the published POM. */
+  object Connector {
+    val collectionCompat = "org.scala-lang.modules" %% "scala-collection-compat" % CollectionCompat
+    val jodaTime = "joda-time" % "joda-time" % JodaTime // ApacheV2
+
+    val dependencies = Seq(collectionCompat, jodaTime)
+  }
+
   implicit class Exclude(module: ModuleID) {
     def logbackExclude(): ModuleID = module
       .exclude("ch.qos.logback", "logback-classic")

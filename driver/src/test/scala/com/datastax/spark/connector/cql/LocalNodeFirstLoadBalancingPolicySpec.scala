@@ -38,7 +38,8 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.jdk.CollectionConverters._
 
 class NodeFilter(context: DriverContext, profileName: String) extends Predicate[Node] {
-  override def test(t: Node): Boolean = DriverUtil.toAddress(t).get.getHostName.equals("192.168.123.2")
+  // getHostAddress, not getHostName: a reverse DNS lookup would make the result depend on the machine's resolver
+  override def test(t: Node): Boolean = DriverUtil.toAddress(t).get.getAddress.getHostAddress.equals("192.168.123.2")
 }
 
 class LocalNodeFirstLoadBalancingPolicySpec extends FlatSpec with Matchers with MockitoSugar with BeforeAndAfterEach {
