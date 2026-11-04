@@ -20,7 +20,6 @@ package com.datastax.spark.connector.types
 
 import com.datastax.dse.driver.api.core.`type`.DseDataTypes
 import com.datastax.dse.driver.api.core.data.geometry.{LineString, Point, Polygon}
-import com.datastax.dse.driver.internal.core.`type`.codec.geometry.PointCodec
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import com.datastax.oss.driver.api.core.CqlSession

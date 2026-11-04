@@ -181,7 +181,8 @@ trait AuthCluster extends SingleClusterFixture {
         "authentication_options.enabled" -> "true"
       )))
     } else if (defaultConfig.scyllaEnabled) {
-      val authConfig = Map("authenticator" -> "PasswordAuthenticator") ++
+      // The authorizer makes the node check permissions, for suites that log in with a role that is not a superuser
+      val authConfig = Map("authenticator" -> "PasswordAuthenticator", "authorizer" -> "CassandraAuthorizer") ++
         AuthCluster.scyllaSuperuserConfig(defaultConfig.version)
       Seq(sslConf.copy(cassandraConfiguration = sslConf.cassandraConfiguration ++ authConfig))
     } else {
