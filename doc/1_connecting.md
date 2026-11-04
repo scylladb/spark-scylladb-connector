@@ -63,11 +63,16 @@ files added in this way just pass the file name to either of the following param
 
 Files are then referenced through one of the following parameters
 
-  1. `spark.cassandra.connection.config.cloud.path` for use with a Cloud Secure Connect bundle from [Datastax Astra]("https://astra.datastax.com/").  Please note that you must provide user name and password as well using corresponding configuration properties;
+  1. `spark.cassandra.connection.config.cloud.path` for use with a Cloud Secure Connect bundle from [Datastax Astra]("https://astra.datastax.com/").  Please note that you must provide user name and password as well using corresponding configuration properties. The ScyllaDB Java Driver no longer supports these bundles since 4.19.2.3: the connection fails with `DataStax Astra support has been removed`;
   2. `spark.cassandra.connection.config.profile.path` for use with a Java Driver [Profile](https://docs.datastax.com/en/developer/java-driver/4.2/manual/core/configuration/) 
   
 When using a profile file all other configuration will be ignored. We are working on improving this behavior but at the moment,
 using a profile supersedes all other config.
+
+### Connecting through ScyllaDB Cloud private endpoints
+
+ScyllaDB Cloud clusters that are only reachable through AWS PrivateLink or GCP Private Service Connect are supported
+through client routes, see [Connecting through ScyllaDB Cloud private endpoints](18_private_endpoints.md).
 
 ### Connection management
 

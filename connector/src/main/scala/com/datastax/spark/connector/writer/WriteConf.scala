@@ -23,7 +23,7 @@ import com.datastax.oss.driver.api.core.`type`.{DataType, DataTypes}
 import com.datastax.spark.connector.cql.{ColumnDef, RegularColumn}
 import com.datastax.spark.connector.types.ColumnType
 import com.datastax.spark.connector.util.ConfigCheck.ConnectorConfigurationException
-import com.datastax.spark.connector.util.{ConfigCheck, ConfigParameter, DeprecatedConfigParameter}
+import com.datastax.spark.connector.util.{ConfigCheck, ConfigParameter, DeprecatedConfigParameter, ExecuteAsUnsupported}
 import com.datastax.spark.connector.{BatchSize, BytesInBatch, RowsInBatch}
 import org.apache.spark.SparkConf
 
@@ -40,6 +40,8 @@ import org.apache.spark.SparkConf
   * @param ttl       the default TTL value which is used when it is defined (in seconds)
   * @param timestamp the default timestamp value which is used when it is defined (in microseconds)
   * @param taskMetricsEnabled whether or not enable task metrics updates (requires Spark 1.2+)
+  * @param executeAs no longer supported, leave it unset: any value is rejected, because the ScyllaDB Java Driver
+  *                  removed DSE proxy execution in 4.19.2.3
   */
 
 case class WriteConf(
@@ -62,6 +64,8 @@ case class WriteConf(
 
   require(optionPlaceholders.distinct.size == optionPlaceholders.size,
     s"TTL and timestamp per-row placeholders must have different names, got: ${optionPlaceholders.mkString(", ")}")
+
+  require(executeAs.isEmpty, ExecuteAsUnsupported)
 
   private[connector] val optionsAsColumns: (String, String) => Seq[ColumnDef] = { (_, _) =>
     def toRegularColDef(opt: WriteOption[_], dataType: DataType) = opt match {

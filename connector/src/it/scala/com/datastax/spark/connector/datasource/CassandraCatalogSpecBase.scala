@@ -24,7 +24,6 @@ import com.datastax.spark.connector.SparkCassandraITFlatSpecBase
 import com.datastax.spark.connector.cluster.DefaultCluster
 import com.datastax.spark.connector.cql.CassandraConnector
 import com.datastax.spark.connector.rdd.partitioner.CassandraPartition
-import org.apache.spark.sql.internal.SQLConf
 import org.scalatest.concurrent.Eventually._
 import org.scalatest.time.SpanSugar._
 import org.scalatest.BeforeAndAfterAll
@@ -75,8 +74,9 @@ class CassandraCatalogSpecBase
 
   override def beforeClass: Unit = {
     super.beforeClass
-    spark.conf.set(s"spark.sql.catalog.$defaultCatalog", classOf[CassandraCatalog].getCanonicalName)
-    spark.conf.set(SQLConf.DEFAULT_CATALOG.key, "cassandra")
+    // Also makes this suite's session the active one: the current catalog is read from the active session's conf, which
+    // is otherwise whichever session a previous suite in the same JVM activated
+    setupCassandraCatalog
   }
 
 

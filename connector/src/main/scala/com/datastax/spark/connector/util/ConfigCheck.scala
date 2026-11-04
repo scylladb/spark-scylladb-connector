@@ -18,6 +18,8 @@
 
 package com.datastax.spark.connector.util
 
+import java.util.concurrent.ConcurrentHashMap
+
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.cassandra.CassandraSourceRelation
@@ -32,7 +34,7 @@ import scala.collection.mutable
   * Helper class to throw exceptions if there are environment variables in the spark.cassandra
   * namespace which don't map to Spark Cassandra Connector known properties.
   */
-object ConfigCheck {
+object ConfigCheck extends Logging {
 
   val MatchThreshold = 0.85
   val Prefix = "spark.cassandra."
@@ -47,6 +49,17 @@ object ConfigCheck {
 
   val deprecatedProperties: mutable.Set[DeprecatedConfigParameter[_]] = DeprecatedConfigParameter.deprecatedParameters
 
+  /** Properties that have no effect any more. Unlike a deprecated property without a replacement, which is rejected,
+    * they are still accepted, so that configurations that set them remain valid. */
+  private lazy val ignoredProperties: Seq[ConfigParameter[_]] = Seq(CassandraConnectionFactory.continuousPagingParam)
+
+  /** The ignored properties that were already reported: each one is reported once per JVM. */
+  private val warnedIgnoredProperties = ConcurrentHashMap.newKeySet[String]()
+
+  /** Returns the names of the properties set in `conf` that have no effect. */
+  private[connector] def ignoredPropertiesIn(conf: SparkConf): Seq[String] =
+    ignoredProperties.map(_.name).filter(conf.contains).sorted
+
  /**
     * Checks the SparkConf Object for any unknown spark.cassandra.* properties and throws an exception
     * with suggestions if an unknown property is found.
@@ -56,6 +69,10 @@ object ConfigCheck {
   def checkConfig(conf: SparkConf): Unit = {
     for (deprecatedProperty <- deprecatedProperties) {
       deprecatedProperty.maybeReplace(conf)
+    }
+
+    for (name <- ignoredPropertiesIn(conf) if warnedIgnoredProperties.add(name)) {
+      logWarning(s"$name is set but has no effect any more: see its description in the configuration reference.")
     }
 
     val connectionFactory = CassandraConnectionFactory.fromSparkConf(conf)

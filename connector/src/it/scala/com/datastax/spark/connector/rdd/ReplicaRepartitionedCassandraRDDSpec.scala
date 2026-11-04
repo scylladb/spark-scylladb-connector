@@ -100,4 +100,16 @@ class ReplicaRepartitionedCassandraRDDSpec extends SparkCassandraITFlatSpecBase 
     repartRDDs.foreach(rdd => rdd.collect should be(first))
   }
 
+  "A Tuple RDD specifying partition keys" should "be keyed by the addresses of the replicas of each row" in {
+    val keyed = sc.parallelize(keys).map(Tuple1(_)).keyByCassandraReplica(ks, tableName)
+
+    val result = keyed.collect()
+    result.map { case (_, Tuple1(key)) => key }.sorted shouldBe keys
+    // One replica per row, as the keyspace has a replication factor of 1, and some rows on each node
+    all(result.map { case (replicas, _) => replicas.size }) shouldBe 1
+    result.flatMap { case (replicas, _) => replicas }.toSet shouldBe conn.hostAddresses
+    // Consumed in part, as take does: the task completion releases the session
+    keyed.take(1) should have size 1
+  }
+
 }
