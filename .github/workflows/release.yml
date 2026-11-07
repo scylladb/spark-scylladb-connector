@@ -161,10 +161,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           RELEASE_TAG=$(git describe --tags --abbrev=0 --match 'v*')
+          # Verify the authoritative tag exists on GitHub, including on reruns.
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" >/dev/null
 
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "GitHub release ${RELEASE_TAG} already exists"
+          if release=$(gh release view "${RELEASE_TAG}" --json isDraft); then
+            if [[ $(jq -r '.isDraft' <<< "$release") != false ]]; then
+              echo "::error::GitHub release ${RELEASE_TAG} is still a draft; publish or remove it before rerunning"
+              exit 1
+            fi
+            echo "Published GitHub release ${RELEASE_TAG} already exists"
             exit 0
           fi
 

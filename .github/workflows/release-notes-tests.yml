@@ -1,0 +1,23 @@
+name: Release publication tests
+
+on:
+  pull_request:
+  push:
+    branches: [scylla-4.x]
+
+permissions:
+  contents: read
+
+jobs:
+  release-notes-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --prefix .github
+      - run: node --test .github/scripts/*.test.cjs
