@@ -69,6 +69,8 @@ jobs:
             maven-${{ runner.os }}-
 
       - name: Compile all modules
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: SCALA_VERSION=${{ inputs.scala-versions || '2-LATEST' }} make compile
 
       - name: Cache compiled classes
@@ -120,6 +122,8 @@ jobs:
           key: compiled-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
 
       - name: Run scalastyle
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: make lint
 
   unit-test:
@@ -163,6 +167,8 @@ jobs:
           key: compiled-${{ runner.os }}-${{ github.sha }}-${{ hashFiles('**/*.sbt', 'project/build.properties', 'project/*.scala') }}
 
       - name: Run unit tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: make test-unit
 
       - name: Publish Test Report
@@ -344,6 +350,8 @@ jobs:
           key: ccm-${{ runner.os }}-${{ steps.ccm-version.outputs.value }}-${{ steps.db-version.outputs.value }}
 
       - name: Run tests
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ matrix.db-type }}" = "cassandra" ]; then
             make test-integration-cassandra
