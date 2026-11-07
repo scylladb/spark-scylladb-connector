@@ -4,11 +4,11 @@ const {readFileSync, writeFileSync, mkdtempSync, rmSync} = require('node:fs');
 const {tmpdir} = require('node:os');
 const {join} = require('node:path');
 const {spawnSync} = require('node:child_process');
+const yaml = require('js-yaml');
 
 const workflow = readFileSync('.github/workflows/release.yml', 'utf8');
-const step = workflow.split('      - name: Create GitHub release\n')[1];
-const script = step.split('        run: |\n')[1]
-  .split('\n').map(line => line.replace(/^          /, '')).join('\n');
+const step = yaml.load(workflow).jobs.release.steps.find(step => step.name === 'Create GitHub release');
+const script = step.run;
 
 function release(mode) {
   const dir = mkdtempSync(join(tmpdir(), 'spark-release-notes-'));
@@ -45,7 +45,7 @@ test('new releases verify the remote tag and generate filtered notes after publi
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.calls, /api .*git\/ref\/tags\/v4\.1\.4/);
   assert.match(result.calls, /release create .*--generate-notes --verify-tag/);
-  assert.match(step, /if: inputs\.dry-run == false/);
+  assert.equal(step.if, 'inputs.dry-run == false');
   assert.ok(workflow.indexOf('- name: Perform release\n') < workflow.indexOf('- name: Push changes to SCM\n'));
   assert.ok(workflow.indexOf('- name: Push changes to SCM\n') < workflow.indexOf('- name: Create GitHub release\n'));
   const config = readFileSync('.github/release.yml', 'utf8');
