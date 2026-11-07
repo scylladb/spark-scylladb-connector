@@ -140,20 +140,21 @@ def configure():
         credential_gpg(["--local-user", SIGNING + "!", "--detach-sign", artifact])
         verify_status(gpg("--status-fd", "1", "--verify", str(artifact) + ".sig", artifact,
                           env=verify_env))
-        config = directory / "gitconfig"
-        # Later CI steps and exec children inherit this isolated Git configuration.
-        write_private(config, "")
         settings = {"user.name": "ScyllaDB Publisher", "user.email": "publish.code@scylladb.com",
                     "user.signingkey": SIGNING + "!", "commit.gpgsign": "true",
                     "tag.gpgSign": "true", "gpg.format": "openpgp", "gpg.program": str(wrapper)}
-        for name, value in settings.items():
-            run(["git", "config", "--file", str(config), name, value])
+        # Command-scope environment settings override checkout-local configuration
+        # without changing it. Preserve unrelated inherited command-scope entries.
+        count = int(os.environ.get("GIT_CONFIG_COUNT", "0"))
         values = {
             "RELEASE_SIGNING_DIR": str(directory),
             "RELEASE_GPG_WRAPPER": str(wrapper),
-            "GIT_CONFIG_GLOBAL": str(config),
+            "GIT_CONFIG_COUNT": str(count + len(settings)),
             "RELEASE_BASE_COMMIT": run(["git", "rev-parse", "HEAD"]).strip(),
         }
+        for index, (name, value) in enumerate(settings.items(), start=count):
+            values[f"GIT_CONFIG_KEY_{index}"] = name
+            values[f"GIT_CONFIG_VALUE_{index}"] = value
         if private:
             values["GNUPGHOME"] = str(signing_home)
         with Path(os.environ.get("GITHUB_ENV", os.devnull)).open("a") as output:

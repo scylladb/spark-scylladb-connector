@@ -17,15 +17,19 @@ class SigningTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.fixture = tempfile.TemporaryDirectory(prefix="repo-signing-fixture-")
+        cls.addClassCleanup(cls.fixture.cleanup)
         cls.directory = Path(cls.fixture.name)
         cls.keyring = cls.directory / "gnupg"
         cls.keyring.mkdir(mode=0o700)
+        cls.addClassCleanup(subprocess.run,
+                            ["gpgconf", "--homedir", str(cls.keyring), "--kill", "gpg-agent"],
+                            capture_output=True, check=True, timeout=60)
         cls.password = "test-only-release-passphrase"
         def gpg(*args):
             result = subprocess.run(
                 ["gpg", "--no-options", "--homedir", str(cls.keyring), "--batch",
                  "--pinentry-mode", "loopback", "--passphrase-fd", "0", *args],
-                input=cls.password + "\n", capture_output=True, text=True, check=True,
+                input=cls.password + "\n", capture_output=True, text=True, check=True, timeout=60,
             )
             return result.stdout
         gpg("--quick-generate-key", "Release Test <release@example.invalid>", "rsa2048", "cert", "1d")
@@ -40,12 +44,6 @@ class SigningTests(unittest.TestCase):
         cls.private.write_text(gpg("--armor", "--export-secret-subkeys", cls.primary))
         cls.full = cls.directory / "full.asc"
         cls.full.write_text(gpg("--armor", "--export-secret-keys", cls.primary))
-
-    @classmethod
-    def tearDownClass(cls):
-        subprocess.run(["gpgconf", "--homedir", str(cls.keyring), "--kill", "gpg-agent"],
-                       capture_output=True, check=True)
-        cls.fixture.cleanup()
 
     @contextmanager
     def repository(self, full=False, password=None):
@@ -62,11 +60,11 @@ class SigningTests(unittest.TestCase):
                        GIT_CONFIG_GLOBAL=str(directory / "initial-gitconfig"),
                        RELEASE_GPG_PASSPHRASE=self.password if password is None else password)
             (directory / "initial-gitconfig").write_text("")
-            subprocess.run(["gpg", "--no-options", "--homedir", str(keyring), "--batch",
-                            "--pinentry-mode", "loopback", "--passphrase-fd", "0", "--import",
-                            str(self.full if full else self.private)], input=self.password + "\n",
-                           capture_output=True, text=True, env=env, check=True)
             try:
+                subprocess.run(["gpg", "--no-options", "--homedir", str(keyring), "--batch",
+                                "--pinentry-mode", "loopback", "--passphrase-fd", "0", "--import",
+                                str(self.full if full else self.private)], input=self.password + "\n",
+                               capture_output=True, text=True, env=env, check=True, timeout=60)
                 with patch.dict(os.environ, env, clear=True), \
                         patch.multiple(signing, PRIMARY=self.primary, SIGNING=self.subkey,
                                        PUBLIC_KEY=self.public):
@@ -83,7 +81,7 @@ class SigningTests(unittest.TestCase):
             finally:
                 os.chdir(original)
                 subprocess.run(["gpgconf", "--homedir", str(keyring), "--kill", "gpg-agent"],
-                               capture_output=True, check=True)
+                               capture_output=True, check=True, timeout=60)
 
     def configured(self):
         values = signing.configure()
@@ -116,6 +114,22 @@ class SigningTests(unittest.TestCase):
             with self.assertRaisesRegex(signing.SigningError, "nonempty"):
                 signing.configure()
             self.assertFalse(list(directory.glob("release-signing-*")))
+
+    def test_local_git_settings_cannot_disable_release_signing(self):
+        with self.repository():
+            for key, value in (("commit.gpgsign", "false"), ("tag.gpgSign", "false"),
+                               ("user.signingkey", "0" * 40), ("gpg.program", "false")):
+                signing.run(["git", "config", "--local", key, value])
+            config = Path(signing.run(["git", "rev-parse", "--git-path", "config"]).strip())
+            before = config.read_bytes()
+            os.environ.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="remote.example.url",
+                              GIT_CONFIG_VALUE_0="https://example.invalid/repo")
+            self.configured()
+            self.release()
+            signing.verify_release("1.0")
+            self.assertEqual(signing.run(["git", "config", "remote.example.url"]).strip(),
+                             "https://example.invalid/repo")
+            self.assertEqual(config.read_bytes(), before)
 
     def test_wrong_passphrase_fails_with_fresh_agent(self):
         with self.repository(password="wrong-test-passphrase") as directory:
@@ -267,6 +281,21 @@ class SigningTests(unittest.TestCase):
                     Path("build.sbt").write_text(source.replace(line, replacement))
                     with self.assertRaisesRegex(signing.SigningError, "gpgCommand"):
                         signing.check_target()
+
+
+class FixtureFailureTests(unittest.TestCase):
+    def test_failed_setup_and_agent_shutdown_still_remove_fixture(self):
+        class FailingFixture(SigningTests):
+            def test_fixture_body(self):
+                self.fail("Failed class setup must prevent the test body")
+
+        with patch.object(subprocess, "run", side_effect=RuntimeError("Fixture GPG failure")) as run:
+            result = unittest.TestResult()
+            unittest.TestSuite([FailingFixture("test_fixture_body")]).run(result)
+        self.assertEqual(len(result.errors), 2)
+        self.assertFalse(FailingFixture.directory.exists())
+        self.assertTrue(any(call.args[0][0] == "gpgconf" for call in run.call_args_list))
+        self.assertTrue(all(call.kwargs["timeout"] == 60 for call in run.call_args_list))
 
 
 if __name__ == "__main__":
