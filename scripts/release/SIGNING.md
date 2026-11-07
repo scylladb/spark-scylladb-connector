@@ -24,10 +24,11 @@ and inherited by release commands. Always run `signing.py cleanup` after a CI jo
 
 Before importing credentials, `signing.py check-target` loads the selected build
 with SBT and validates the effective signing settings in every project. It checks
-the signing fingerprint, GPG selection, disabled passphrase fallback and wrapper
-environment lookup. Inactive settings and project overrides that violate this
-policy fail the check. Java and the target's SBT dependencies must be available;
-the check has a ten-minute deadline and does not publish or import signing keys.
+the signing fingerprint, GPG selection, disabled passphrase fallback, wrapper
+environment lookup and that artifact signing is enabled. Inactive settings and
+project overrides that violate this policy fail the check. Java and the target's
+SBT dependencies must be available. The check has a ten-minute deadline and does
+not publish or import signing keys.
 
 For maintainer-driven release preparation, use an isolated invocation:
 

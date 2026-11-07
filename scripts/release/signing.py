@@ -177,10 +177,12 @@ def check_target():
       val passwords = PgpKeys.pgpSelectPassphrase.all(ScopeFilter(inAnyProject)).value;
       val keys = PgpKeys.pgpSigningKey.all(ScopeFilter(inAnyProject)).value;
       val commands = PgpKeys.gpgCommand.all(ScopeFilter(inAnyProject)).value;
+      val skips = (PgpKeys.pgpSigner / skip).all(ScopeFilter(inAnyProject)).value;
       require(uses.nonEmpty && uses.forall(identity), "Required signing setting: useGpg");
       require(passwords.nonEmpty && passwords.forall(_.isEmpty), "Required signing setting: pgpSelectPassphrase");
       require(keys.nonEmpty && keys.forall(_.contains("{SIGNING}!")), "Required signing setting: pgpSigningKey");
-      require(commands.nonEmpty && commands.forall(_ == sys.env("RELEASE_GPG_WRAPPER")), "Required signing setting: gpgCommand")
+      require(commands.nonEmpty && commands.forall(_ == sys.env("RELEASE_GPG_WRAPPER")), "Required signing setting: gpgCommand");
+      require(skips.nonEmpty && skips.forall(value => !value), "Required signing setting: pgpSigner / skip")
     }}'''
     # Non-secret probes distinguish the disabled passphrase fallback and wrapper
     # environment lookup from defaults that happen to match without credentials.

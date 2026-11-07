@@ -299,6 +299,7 @@ class TargetCheckTests(unittest.TestCase):
                     ('val documentation = """\n' + source + '\n"""', "signing setting"),
                     (source + "\n\nGlobal / PgpKeys.useGpg := false", "useGpg"),
                     (source + '\n\nchild / PgpKeys.pgpSigningKey := Some("wrong")', "pgpSigningKey"),
+                    (source + '\n\nchild / PgpKeys.pgpSigner / skip := true', "pgpSigner / skip"),
                     (source.replace(settings[1], ""), "pgpSelectPassphrase"),
                 ]
                 for build, diagnostic in cases:
@@ -313,10 +314,14 @@ class TargetCheckTests(unittest.TestCase):
 class FixtureFailureTests(unittest.TestCase):
     def test_failed_setup_and_agent_shutdown_still_remove_fixture(self):
         class FailingFixture(SigningTests):
+            # This fixture uses mocked subprocesses even when real tools are absent.
+            __unittest_skip__ = False
+
             def test_fixture_body(self):
                 self.fail("Failed class setup must prevent the test body")
 
-        with patch.object(subprocess, "run", side_effect=RuntimeError("Fixture GPG failure")) as run:
+        with patch.object(SigningTests, "__unittest_skip__", True, create=True), \
+                patch.object(subprocess, "run", side_effect=RuntimeError("Fixture GPG failure")) as run:
             result = unittest.TestResult()
             unittest.TestSuite([FailingFixture("test_fixture_body")]).run(result)
         self.assertEqual(len(result.errors), 2)
