@@ -15,7 +15,7 @@ on:
 
       target-tag:
         type: string
-        description: 'target-tag: tag or branch name to release. Use to re-release tagged releases'
+        description: 'target-tag: release target; historical targets must support repository signing and guarded logs'
         default: scylla-4.x
 
 jobs:
@@ -84,9 +84,7 @@ jobs:
 
       - name: Require the selected target to support repository signing
         run: |
-          grep -Fq 'Global / PgpKeys.pgpSelectPassphrase := None' build.sbt
-          grep -Fq 'Global / PgpKeys.pgpSigningKey := Some("1DEE56548AA691E39E717034650D11682F0D8040!")' build.sbt
-          grep -Fq 'RELEASE_GPG_WRAPPER' build.sbt
+          python3 "$RELEASE_SIGNING_HELPER" check-target
 
       - name: Set up Java
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
@@ -94,13 +92,10 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: sbt
-          gpg-private-key: ${{ secrets.PGP_SECRET }}
-          gpg-passphrase-env-var: PGP_PASSPHRASE
-        env:
-          PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
 
       - name: Configure protected repository signing subkey
         env:
+          RELEASE_GPG_PRIVATE_KEY: ${{ secrets.PGP_SECRET }}
           RELEASE_GPG_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
         run: python3 "$RELEASE_SIGNING_HELPER" configure
 
@@ -138,6 +133,7 @@ jobs:
         if: inputs.dry-run == false
         env:
           RELEASE_SKIP_TESTS: ${{ inputs.skip-tests }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}
@@ -151,6 +147,7 @@ jobs:
         if: inputs.dry-run == true
         env:
           RELEASE_SKIP_TESTS: ${{ inputs.skip-tests }}
+          RELEASE_GPG_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           SONATYPE_USERNAME: ${{ secrets.SONATYPE_TOKEN_USERNAME }}
           SONATYPE_PASSWORD: ${{ secrets.SONATYPE_TOKEN_PASSWORD }}

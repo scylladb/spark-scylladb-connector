@@ -20,19 +20,19 @@ preflight and verifies the exact signing and certification fingerprints against 
 separate public-only keyring. Anonymous pipes supply the key import and passphrase; neither credential is
 written to a temporary file or included in command-line arguments. Each signing
 step receives its secret explicitly; setup does not write it into `GITHUB_ENV`. Git configuration is job-specific
-and inherited by release-tool clones. Always run `signing.py cleanup` after a CI job.
+and inherited by release commands. Always run `signing.py cleanup` after a CI job.
 
 For maintainer-driven release preparation, use an isolated invocation:
 
 ```sh
 export RELEASE_GPG_PRIVATE_KEY_FILE=/private/path/signing-private.asc
 export RELEASE_GPG_PASSPHRASE_FILE=/private/path/passphrase.txt
-python3 scripts/release/signing.py exec git tag -s vX.Y.Z -m 'Release vX.Y.Z'
+python3 scripts/release/signing.py exec make release-prepare
 python3 scripts/release/signing.py verify-tag vX.Y.Z
 ```
 
-Use the same `exec` prefix with the repository's release-commit preparation command
-where applicable. It restores checkout signing configuration on exit. Do not change
+The command creates both release commits and the annotated release tag using an
+isolated Git configuration, then removes its temporary signing files. Do not change
 or replace existing release tags. A failed verification blocks publication.
 
 Consumers should obtain this public certificate from this repository at a reviewed
@@ -45,8 +45,9 @@ gpg --fingerprint 8B1F57F5CC1C8885123269BD51F8F5D28756A0C5
 gpg --status-fd 1 --verify ARTIFACT.asc ARTIFACT
 ```
 
-Require one `VALIDSIG` record with the signing fingerprint above and the expected
-primary fingerprint. `git verify-tag --raw TAG` and `git verify-commit --raw COMMIT`
+Require one `GOODSIG` and one `VALIDSIG` record with the signing fingerprint above
+and the expected primary fingerprint; reject `EXPKEYSIG`, `REVKEYSIG`, `EXPSIG`,
+`BADSIG` and `ERRSIG` records. `git verify-tag --raw TAG` and `git verify-commit --raw COMMIT`
 provide the equivalent check for Git objects. Keyserver presence alone establishes
 neither trust nor the expected repository identity.
 
@@ -61,7 +62,7 @@ following the repository's recovery instructions.
 
 ## Spark publishing
 
-`PGP_SECRET` is ASCII armor because `setup-java` imports it directly; the workflow
+`PGP_SECRET` is ASCII armor imported by `signing.py` through an anonymous pipe; the workflow
 uses `publishSigned`, not `ci-release`'s base64 import. `pgpSelectPassphrase` is
 explicitly `None`, preventing the sbt-pgp environment fallback from passing a
 passphrase on argv. Its GPG command uses the wrapper and a separate passphrase pipe instead.

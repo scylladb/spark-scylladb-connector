@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import re
 import shutil
 import shlex
 import subprocess
@@ -20,9 +21,13 @@ class SigningError(ValueError):
 
 
 def run(command, env=None):
-    result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=60)
+    try:
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired:
+        raise SigningError(f"{shlex.join(list(map(str, command)))} timed out.") from None
     if result.returncode:
-        raise SigningError("Release signing command failed; values withheld.")
+        raise SigningError(f"{shlex.join(list(map(str, command)))} failed "
+                           f"(exit {result.returncode}): {result.stdout}{result.stderr}")
     return result.stdout + result.stderr
 
 
@@ -32,9 +37,14 @@ def gpg(*args, env=None):
 
 
 def verify_status(status):
+    records = [line.split()[1] for line in status.splitlines()
+               if line.startswith("[GNUPG:] ") and len(line.split()) > 1]
     signatures = [line.split() for line in status.splitlines()
                   if line.startswith("[GNUPG:] VALIDSIG ")]
-    if (len(signatures) != 1 or len(signatures[0]) != 12
+    if (records.count("GOODSIG") != 1
+            or any(record in records for record in
+                   ("EXPKEYSIG", "REVKEYSIG", "EXPSIG", "BADSIG", "ERRSIG"))
+            or len(signatures) != 1 or len(signatures[0]) != 12
             or signatures[0][2] != SIGNING or signatures[0][-1] != PRIMARY):
         raise SigningError("Signature does not match the repository's release subkey.")
 
@@ -66,9 +76,7 @@ def public_environment(directory):
 
 
 def passphrase_value():
-    value = os.environ.get("RELEASE_GPG_PASSPHRASE",
-                           os.environ.get("MAVEN_GPG_PASSPHRASE",
-                                          os.environ.get("PGP_PASSPHRASE", "")))
+    value = os.environ.get("RELEASE_GPG_PASSPHRASE", "")
     if "RELEASE_GPG_PASSPHRASE_FILE" in os.environ:
         value = Path(os.environ["RELEASE_GPG_PASSPHRASE_FILE"]).read_text().removesuffix("\n")
     if not value or "\n" in value or "\r" in value or len(value.encode()) > 1024:
@@ -77,6 +85,8 @@ def passphrase_value():
 
 
 def credential_gpg(args, payload=None, capture=True):
+    if any(str(arg).startswith("--passphrase") for arg in args):
+        raise SigningError("Caller-supplied --passphrase options are forbidden.")
     # A separate pipe preserves stdin for Git's payload. Its descriptor, never
     # its contents, appears in argv; pass_fds deliberately survives only to gpg.
     reader, writer = os.pipe()
@@ -91,7 +101,8 @@ def credential_gpg(args, payload=None, capture=True):
             input=payload, capture_output=capture, text=capture, pass_fds=(reader,), timeout=60)
         if capture:
             if result.returncode:
-                raise SigningError("Release signing command failed; values withheld.")
+                raise SigningError(f"GPG credential operation failed (exit {result.returncode}); "
+                                   "credential output withheld.")
             return result.stdout + result.stderr
         return result.returncode
     finally:
@@ -100,6 +111,8 @@ def credential_gpg(args, payload=None, capture=True):
 
 def configure():
     passphrase_value()
+    if not os.environ.get("GNUPGHOME"):
+        os.environ["GNUPGHOME"] = run(["gpgconf", "--list-dirs", "homedir"]).strip()
     os.environ.setdefault("RUNNER_TEMP", tempfile.gettempdir())
     directory = Path(tempfile.mkdtemp(prefix="release-signing-", dir=os.environ["RUNNER_TEMP"]))
     try:
@@ -128,19 +141,17 @@ def configure():
         verify_status(gpg("--status-fd", "1", "--verify", str(artifact) + ".sig", artifact,
                           env=verify_env))
         config = directory / "gitconfig"
-        # A job-specific global file is inherited by Maven's localCheckout clones too.
+        # Later CI steps and exec children inherit this isolated Git configuration.
         write_private(config, "")
         settings = {"user.name": "ScyllaDB Publisher", "user.email": "publish.code@scylladb.com",
                     "user.signingkey": SIGNING + "!", "commit.gpgsign": "true",
                     "tag.gpgSign": "true", "gpg.format": "openpgp", "gpg.program": str(wrapper)}
         for name, value in settings.items():
             run(["git", "config", "--file", str(config), name, value])
-            run(["git", "config", "--local", name, value])
         values = {
             "RELEASE_SIGNING_DIR": str(directory),
             "RELEASE_GPG_WRAPPER": str(wrapper),
             "GIT_CONFIG_GLOBAL": str(config),
-            "RELEASE_MAVEN_OPTS": "-Dgpg.keyname=" + SIGNING + "!",
             "RELEASE_BASE_COMMIT": run(["git", "rev-parse", "HEAD"]).strip(),
         }
         if private:
@@ -151,12 +162,26 @@ def configure():
                 output.write(f"{name}<<{marker}\n{value}\n{marker}\n")
         return values
     except BaseException:
-        for home in (directory / "keyring", directory / "public"):
-            if home.exists():
-                subprocess.run(["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"],
-                               capture_output=True)
-        shutil.rmtree(directory)
+        try:
+            remove_signing_directory(directory)
+        except Exception:
+            pass  # Preserve the configuration failure after removing temporary files.
         raise
+
+
+def check_target():
+    # Require complete active settings; a comment mentioning the wrapper is insufficient.
+    source = re.sub(r"/\*.*?\*/", "", Path("build.sbt").read_text(), flags=re.DOTALL)
+    lines = {line.strip() for line in source.splitlines()}
+    required = [
+        "Global / PgpKeys.useGpg := true",
+        "Global / PgpKeys.pgpSelectPassphrase := None",
+        'Global / PgpKeys.pgpSigningKey := Some("' + SIGNING + '!")',
+        'Global / PgpKeys.gpgCommand := sys.env.getOrElse("RELEASE_GPG_WRAPPER", "gpg")',
+    ]
+    for setting in required:
+        if setting not in lines:
+            raise SigningError("Selected release target lacks required signing setting: " + setting)
 
 
 def verify_release(tag):
@@ -224,12 +249,22 @@ def sign_files(files):
                           env=public_environment(directory)))
 
 
-def verify_prepared():
-    properties = Path("release.properties").read_text().splitlines()
-    tags = [line.removeprefix("scm.tag=") for line in properties if line.startswith("scm.tag=")]
-    if len(tags) != 1:
-        raise SigningError("Expected exactly one prepared Maven release tag.")
-    verify_release(tags[0])
+def remove_signing_directory(directory):
+    failure = None
+    homes = {directory / "keyring", directory / "public"}
+    if os.environ.get("GNUPGHOME"):
+        homes.add(Path(os.environ["GNUPGHOME"]))
+    try:
+        for home in sorted(homes):
+            if home.exists():
+                try:
+                    run(["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"])
+                except Exception as error:
+                    failure = error
+    finally:
+        shutil.rmtree(directory)
+    if failure is not None:
+        raise failure
 
 
 def cleanup():
@@ -241,10 +276,7 @@ def cleanup():
             or not directory.name.startswith("release-signing-")):
         raise SigningError("Unexpected release signing directory.")
     if directory.exists():
-        for home in (directory / "keyring", directory / "public"):
-            if home.exists():
-                run(["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"])
-        shutil.rmtree(directory)
+        remove_signing_directory(directory)
 
 
 def main():
@@ -254,10 +286,10 @@ def main():
             return credential_gpg(sys.argv[2:], capture=False)
         if sys.argv[1:] == ["configure"]:
             configure()
+        elif sys.argv[1:] == ["check-target"]:
+            check_target()
         elif len(sys.argv) == 3 and sys.argv[1] == "verify-release":
             verify_release(sys.argv[2])
-        elif sys.argv[1:] == ["verify-prepared"]:
-            verify_prepared()
         elif len(sys.argv) == 3 and sys.argv[1] == "verify-commit":
             verify_commit(sys.argv[2])
         elif len(sys.argv) == 3 and sys.argv[1] == "verify-tag":
@@ -265,28 +297,21 @@ def main():
         elif len(sys.argv) > 2 and sys.argv[1] == "sign-files":
             sign_files(sys.argv[2:])
         elif len(sys.argv) > 2 and sys.argv[1] == "exec":
-            config = Path(run(["git", "rev-parse", "--git-path", "config"]).strip())
-            previous = config.read_bytes()
             values = {}
             try:
                 values = configure()
                 env = {**os.environ, **values}
-                env["MAVEN_OPTS"] = (env.get("MAVEN_OPTS", "") + " "
-                                     + values["RELEASE_MAVEN_OPTS"]).strip()
                 result = subprocess.run(sys.argv[2:], env=env)
                 if result.returncode:
                     raise SigningError("Release command failed.")
             finally:
-                try:
-                    if values:
-                        os.environ.update(values)
-                        cleanup()
-                finally:
-                    config.write_bytes(previous)
+                if values:
+                    os.environ.update(values)
+                    cleanup()
         elif sys.argv[1:] == ["cleanup"]:
             cleanup()
         else:
-            raise SigningError("Expected configure, verify-prepared, verify-release TAG, verify-tag TAG, sign-files FILE..., exec COMMAND..., or cleanup.")
+            raise SigningError("Expected configure, check-target, verify-release TAG, verify-tag TAG, verify-commit COMMIT, sign-files FILE..., exec COMMAND..., or cleanup.")
         print("Release signing " + sys.argv[1] + " passed.")
         return 0
     except SigningError as error:

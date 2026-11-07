@@ -54,11 +54,13 @@ class SigningTests(unittest.TestCase):
             directory = Path(temp)
             keyring = directory / "gnupg"
             keyring.mkdir(mode=0o700)
-            env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+            env = {key: value for key, value in os.environ.items()
+                   if not key.startswith(("GIT_", "RELEASE_GPG_", "RELEASE_SIGNING_"))
+                   and key not in ("MAVEN_GPG_PASSPHRASE", "PGP_PASSPHRASE")}
             env.update(GNUPGHOME=str(keyring), RUNNER_TEMP=str(directory),
                        GITHUB_ENV=str(directory / "github-env"), GIT_CONFIG_NOSYSTEM="1",
                        GIT_CONFIG_GLOBAL=str(directory / "initial-gitconfig"),
-                       MAVEN_GPG_PASSPHRASE=self.password if password is None else password)
+                       RELEASE_GPG_PASSPHRASE=self.password if password is None else password)
             (directory / "initial-gitconfig").write_text("")
             subprocess.run(["gpg", "--no-options", "--homedir", str(keyring), "--batch",
                             "--pinentry-mode", "loopback", "--passphrase-fd", "0", "--import",
@@ -74,7 +76,10 @@ class SigningTests(unittest.TestCase):
                     signing.run(["git", "-c", "user.name=Initial", "-c",
                                  "user.email=initial@example.invalid", "-c", "commit.gpgsign=false",
                                  "commit", "--quiet", "--allow-empty", "-m", "Initial"])
-                    yield directory
+                    try:
+                        yield directory
+                    finally:
+                        signing.cleanup()
             finally:
                 os.chdir(original)
                 subprocess.run(["gpgconf", "--homedir", str(keyring), "--kill", "gpg-agent"],
@@ -90,26 +95,19 @@ class SigningTests(unittest.TestCase):
 
     def release(self):
         signing.run(["git", "commit", "--quiet", "--allow-empty", "-m", "Release"])
-        # Maven gitexe creates annotated tags with -F rather than an explicit -s.
-        Path("message").write_text("Release 1.0\n")
-        signing.run(["git", "tag", "-F", "message", "1.0"])
+        # make release-prepare relies on tag.gpgSign for its annotated tag.
+        signing.run(["git", "tag", "-a", "-m", "Release 1.0", "1.0"])
         signing.run(["git", "commit", "--quiet", "--allow-empty", "-m", "Next development"])
 
-    def test_signed_release_and_cloned_checkout(self):
+    def test_signed_release_and_unchanged_checkout_config(self):
         with self.repository() as directory:
+            config = Path(signing.run(["git", "rev-parse", "--git-path", "config"]).strip())
+            before = config.read_bytes()
             values = self.configured()
-            self.assertIn("-Dgpg.keyname=" + self.subkey + "!", values["RELEASE_MAVEN_OPTS"])
+            self.assertNotIn("RELEASE_MAVEN_OPTS", values)
             self.release()
             signing.verify_release("1.0")
-            # release:perform makes a separate clone: signing must survive that boundary.
-            clone = directory / "perform-clone"
-            signing.run(["git", "clone", "--quiet", "--local", ".", str(clone)])
-            signing.run(["git", "-C", str(clone), "commit", "--quiet", "--allow-empty",
-                         "-m", "Clone signing"])
-            status = signing.run(["git", "-C", str(clone), "-c", "gpg.program=gpg",
-                                  "verify-commit", "--raw", "HEAD"],
-                                 signing.public_environment(Path(values["RELEASE_SIGNING_DIR"])))
-            signing.verify_status(status)
+            self.assertEqual(config.read_bytes(), before)
             signing.cleanup()
             self.assertFalse(Path(values["RELEASE_SIGNING_DIR"]).exists())
 
@@ -199,20 +197,76 @@ class SigningTests(unittest.TestCase):
         with self.repository():
             self.configured()
             signing.run(["gpgconf", "--homedir", os.environ["GNUPGHOME"], "--kill", "gpg-agent"])
-            os.environ["MAVEN_GPG_PASSPHRASE"] = "incorrect-fixture-passphrase"
+            os.environ["RELEASE_GPG_PASSPHRASE"] = "incorrect-fixture-passphrase"
             with self.assertRaises(signing.SigningError):
                 signing.run(["git", "commit", "--allow-empty", "-qm", "Must fail"])
-            os.environ["MAVEN_GPG_PASSPHRASE"] = self.password
+            os.environ["RELEASE_GPG_PASSPHRASE"] = self.password
             signing.run(["git", "commit", "--allow-empty", "-qm", "Correct passphrase"])
             signing.verify_commit("HEAD")
 
     def test_other_signer_and_ambiguous_signatures_rejected(self):
-        valid = "[GNUPG:] VALIDSIG " + signing.SIGNING + " 2026-10-20 1 0 4 0 1 10 00 " + signing.PRIMARY
+        valid = ("[GNUPG:] GOODSIG " + signing.SIGNING[-16:] + " Publisher\n"
+                 "[GNUPG:] VALIDSIG " + signing.SIGNING
+                 + " 2026-10-20 1 0 4 0 1 10 00 " + signing.PRIMARY)
         signing.verify_status(valid)
         for status in [valid.replace(signing.SIGNING, "0" * 40),
-                       valid.replace(signing.PRIMARY, "0" * 40), valid + "\n" + valid]:
+                       valid.replace(signing.PRIMARY, "0" * 40), valid + "\n" + valid,
+                       valid.splitlines()[-1]] + [valid + "\n[GNUPG:] " + record for record in
+                       ("EXPKEYSIG", "REVKEYSIG", "EXPSIG", "BADSIG", "ERRSIG")]:
             with self.assertRaises(signing.SigningError):
                 signing.verify_status(status)
+
+    def test_default_gnupg_home_and_agent_cleanup(self):
+        with self.repository() as directory:
+            home = os.environ.pop("GNUPGHOME")
+            original_run = signing.run
+            def run(command, env=None):
+                if command == ["gpgconf", "--list-dirs", "homedir"]:
+                    return home + "\n"
+                return original_run(command, env)
+            with patch.object(signing, "run", side_effect=run):
+                self.configured()
+            self.assertEqual(os.environ["GNUPGHOME"], home)
+            with patch.object(signing, "run", wraps=original_run) as calls:
+                signing.cleanup()
+            calls.assert_any_call(["gpgconf", "--homedir", home, "--kill", "gpg-agent"])
+
+    def test_cleanup_removes_files_when_agent_shutdown_fails(self):
+        with self.repository():
+            values = self.configured()
+            directory = Path(values["RELEASE_SIGNING_DIR"])
+            with patch.object(signing, "run", side_effect=signing.SigningError("Shutdown failed")):
+                with self.assertRaisesRegex(signing.SigningError, "Shutdown failed"):
+                    signing.cleanup()
+            self.assertFalse(directory.exists())
+
+    def test_exec_preserves_unrelated_git_config_changes(self):
+        with self.repository():
+            with patch("sys.argv", ["signing.py", "exec", "git", "config", "--local",
+                                    "remote.example.url", "https://example.invalid/repo"]):
+                self.assertEqual(signing.main(), 0)
+            self.assertEqual(signing.run(["git", "config", "--local", "remote.example.url"]).strip(),
+                             "https://example.invalid/repo")
+
+    def test_wrapper_rejects_passphrase_options_before_spawning(self):
+        for option in ("--passphrase", "--passphrase-file", "--passphrase-fd=0"):
+            with patch.object(signing.subprocess, "run") as spawn:
+                with self.assertRaisesRegex(signing.SigningError, "forbidden"):
+                    signing.credential_gpg([option, "secret"])
+                spawn.assert_not_called()
+
+    def test_target_check_rejects_wrapper_mentioned_only_in_comment(self):
+        source = (Path(__file__).resolve().parents[2] / "build.sbt").read_text()
+        with self.repository():
+            Path("build.sbt").write_text(source)
+            # Fixture signing fingerprints differ from the repository's real public key.
+            with patch.object(signing, "SIGNING", "1DEE56548AA691E39E717034650D11682F0D8040"):
+                signing.check_target()
+                line = 'Global / PgpKeys.gpgCommand := sys.env.getOrElse("RELEASE_GPG_WRAPPER", "gpg")'
+                for replacement in ("// " + line, "/* " + line + " */"):
+                    Path("build.sbt").write_text(source.replace(line, replacement))
+                    with self.assertRaisesRegex(signing.SigningError, "gpgCommand"):
+                        signing.check_target()
 
 
 if __name__ == "__main__":
