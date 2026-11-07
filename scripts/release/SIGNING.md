@@ -22,6 +22,13 @@ written to a temporary file or included in command-line arguments. Each signing
 step receives its secret explicitly; setup does not write it into `GITHUB_ENV`. Git configuration is job-specific
 and inherited by release commands. Always run `signing.py cleanup` after a CI job.
 
+Before importing credentials, `signing.py check-target` loads the selected build
+with SBT and validates the effective signing settings in every project. It checks
+the signing fingerprint, GPG selection, disabled passphrase fallback and wrapper
+environment lookup. Inactive settings and project overrides that violate this
+policy fail the check. Java and the target's SBT dependencies must be available;
+the check has a ten-minute deadline and does not publish or import signing keys.
+
 For maintainer-driven release preparation, use an isolated invocation:
 
 ```sh

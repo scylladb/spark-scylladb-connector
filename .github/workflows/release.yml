@@ -82,16 +82,15 @@ jobs:
       - name: Check selected release log capture
         run: python3 "$RELEASE_GUARD" check
 
-      - name: Require the selected target to support repository signing
-        run: |
-          python3 "$RELEASE_SIGNING_HELPER" check-target
-
       - name: Set up Java
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: sbt
+
+      - name: Require the selected target to support repository signing
+        run: python3 "$RELEASE_SIGNING_HELPER" check-target
 
       - name: Configure protected repository signing subkey
         env:

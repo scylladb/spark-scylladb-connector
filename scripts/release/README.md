@@ -25,4 +25,6 @@ publication tasks, skip-test behavior, tag preparation and SCM pushes are unchan
 `python3 -m unittest discover -s scripts/release -p 'test_*.py' -v` exercises capture
 with synthetic credentials and fake SBT/git commands, and release signing with
 disposable protected PGP keys and temporary Git repositories. The signing tests
-import test keys and sign test artifacts; no checks publish to a registry.
+import test keys and sign test artifacts. With Java 17 available, they also load
+minimal SBT builds to reject inactive or overridden signing settings. No checks
+publish to a registry.

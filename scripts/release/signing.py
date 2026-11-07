@@ -3,7 +3,6 @@
 
 import os
 from pathlib import Path
-import re
 import shutil
 import shlex
 import subprocess
@@ -20,9 +19,9 @@ class SigningError(ValueError):
     pass
 
 
-def run(command, env=None):
+def run(command, env=None, timeout=60):
     try:
-        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         raise SigningError(f"{shlex.join(list(map(str, command)))} timed out.") from None
     if result.returncode:
@@ -171,18 +170,23 @@ def configure():
 
 
 def check_target():
-    # Require complete active settings; a comment mentioning the wrapper is insufficient.
-    source = re.sub(r"/\*.*?\*/", "", Path("build.sbt").read_text(), flags=re.DOTALL)
-    lines = {line.strip() for line in source.splitlines()}
-    required = [
-        "Global / PgpKeys.useGpg := true",
-        "Global / PgpKeys.pgpSelectPassphrase := None",
-        'Global / PgpKeys.pgpSigningKey := Some("' + SIGNING + '!")',
-        'Global / PgpKeys.gpgCommand := sys.env.getOrElse("RELEASE_GPG_WRAPPER", "gpg")',
-    ]
-    for setting in required:
-        if setting not in lines:
-            raise SigningError("Selected release target lacks required signing setting: " + setting)
+    # Evaluate the target build: comments, strings and overridden settings cannot
+    # establish the policy. Check project scopes as well as inherited globals.
+    check = f'''set Global / TaskKey[Unit]("releaseSigningCheck") := {{
+      val uses = PgpKeys.useGpg.all(ScopeFilter(inAnyProject)).value;
+      val passwords = PgpKeys.pgpSelectPassphrase.all(ScopeFilter(inAnyProject)).value;
+      val keys = PgpKeys.pgpSigningKey.all(ScopeFilter(inAnyProject)).value;
+      val commands = PgpKeys.gpgCommand.all(ScopeFilter(inAnyProject)).value;
+      require(uses.nonEmpty && uses.forall(identity), "Required signing setting: useGpg");
+      require(passwords.nonEmpty && passwords.forall(_.isEmpty), "Required signing setting: pgpSelectPassphrase");
+      require(keys.nonEmpty && keys.forall(_.contains("{SIGNING}!")), "Required signing setting: pgpSigningKey");
+      require(commands.nonEmpty && commands.forall(_ == sys.env("RELEASE_GPG_WRAPPER")), "Required signing setting: gpgCommand")
+    }}'''
+    # Non-secret probes distinguish the disabled passphrase fallback and wrapper
+    # environment lookup from defaults that happen to match without credentials.
+    env = {**os.environ, "RELEASE_GPG_WRAPPER": "/release-signing-check-" + uuid.uuid4().hex,
+           "PGP_PASSPHRASE": "release-signing-policy-check"}
+    run(["./sbt/sbt", " ".join(check.split()), "releaseSigningCheck"], env, timeout=600)
 
 
 def verify_release(tag):

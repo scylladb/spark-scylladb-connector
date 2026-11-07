@@ -269,18 +269,45 @@ class SigningTests(unittest.TestCase):
                     signing.credential_gpg([option, "secret"])
                 spawn.assert_not_called()
 
-    def test_target_check_rejects_wrapper_mentioned_only_in_comment(self):
-        source = (Path(__file__).resolve().parents[2] / "build.sbt").read_text()
-        with self.repository():
-            Path("build.sbt").write_text(source)
-            # Fixture signing fingerprints differ from the repository's real public key.
-            with patch.object(signing, "SIGNING", "1DEE56548AA691E39E717034650D11682F0D8040"):
+
+@unittest.skipUnless(shutil.which("java"), "Java required for the SBT signing-policy check")
+class TargetCheckTests(unittest.TestCase):
+    def test_effective_settings_reject_inactive_definitions_and_overrides(self):
+        root = Path(__file__).resolve().parents[2]
+        settings = [
+            "Global / PgpKeys.useGpg := true",
+            "Global / PgpKeys.pgpSelectPassphrase := None",
+            'Global / PgpKeys.pgpSigningKey := Some("' + signing.SIGNING + '!")',
+            'Global / PgpKeys.gpgCommand := sys.env.getOrElse("RELEASE_GPG_WRAPPER", "gpg")',
+        ]
+        source = "\n\n".join(settings)
+        project = '\n\nlazy val child = project.in(file("child"))\n'
+        original = Path.cwd()
+        with tempfile.TemporaryDirectory(prefix="repo-signing-sbt-") as temp:
+            directory = Path(temp)
+            (directory / "sbt").symlink_to(root / "sbt", target_is_directory=True)
+            (directory / "project").mkdir()
+            shutil.copyfile(root / "project/build.properties", directory / "project/build.properties")
+            (directory / "project/plugins.sbt").write_text(
+                'addSbtPlugin("com.github.sbt" % "sbt-pgp" % "2.3.1")\n')
+            try:
+                os.chdir(directory)
+                Path("build.sbt").write_text(source + project)
                 signing.check_target()
-                line = 'Global / PgpKeys.gpgCommand := sys.env.getOrElse("RELEASE_GPG_WRAPPER", "gpg")'
-                for replacement in ("// " + line, "/* " + line + " */"):
-                    Path("build.sbt").write_text(source.replace(line, replacement))
-                    with self.assertRaisesRegex(signing.SigningError, "gpgCommand"):
-                        signing.check_target()
+                cases = [
+                    (source.replace(settings[3], "// " + settings[3]), "gpgCommand"),
+                    ('val documentation = """\n' + source + '\n"""', "signing setting"),
+                    (source + "\n\nGlobal / PgpKeys.useGpg := false", "useGpg"),
+                    (source + '\n\nchild / PgpKeys.pgpSigningKey := Some("wrong")', "pgpSigningKey"),
+                    (source.replace(settings[1], ""), "pgpSelectPassphrase"),
+                ]
+                for build, diagnostic in cases:
+                    with self.subTest(diagnostic=diagnostic, build=build):
+                        Path("build.sbt").write_text(build + project)
+                        with self.assertRaisesRegex(signing.SigningError, diagnostic):
+                            signing.check_target()
+            finally:
+                os.chdir(original)
 
 
 class FixtureFailureTests(unittest.TestCase):
