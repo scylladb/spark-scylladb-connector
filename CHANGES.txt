@@ -1,6 +1,7 @@
 Unreleased
  * Restrict release-note label cleanup to confirmed pull requests
  * Automatically omit verified support-only PRs from generated GitHub release notes
+ * Sign release artifacts, commits and tags with the repository-specific protected signing subkey (#123)
  * Sanitize retained SBT release stdout and stderr before console or artifact writes
  * Cache token-range scan prepared statements by CQL template to avoid bind arity mismatches (#110)
  * Fix batched writes carrying consistency level on child statements,

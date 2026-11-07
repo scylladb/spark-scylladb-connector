@@ -151,3 +151,9 @@ lazy val publishableAssembly = project
     name := "spark-scylladb-connector-assembly",
     Compile / packageBin := (connector / Compile / assembly).value
   )
+
+// Keep signing credentials out of sbt-pgp's command-line arguments.
+Global / PgpKeys.useGpg := true
+Global / PgpKeys.pgpSelectPassphrase := None
+Global / PgpKeys.pgpSigningKey := Some("1DEE56548AA691E39E717034650D11682F0D8040!")
+Global / PgpKeys.gpgCommand := sys.env.getOrElse("RELEASE_GPG_WRAPPER", "gpg")
