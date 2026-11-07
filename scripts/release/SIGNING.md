@@ -33,15 +33,21 @@ not publish or import signing keys.
 For maintainer-driven release preparation, use an isolated invocation:
 
 ```sh
-export RELEASE_GPG_PRIVATE_KEY_FILE=/private/path/signing-private.asc
-export RELEASE_GPG_PASSPHRASE_FILE=/private/path/passphrase.txt
-python3 scripts/release/signing.py exec make release-prepare
-python3 scripts/release/signing.py verify-tag vX.Y.Z
+python3 scripts/release/signing.py check-target &&
+RELEASE_GPG_PRIVATE_KEY_FILE=/private/path/signing-private.asc \
+RELEASE_GPG_PASSPHRASE_FILE=/private/path/passphrase.txt \
+python3 scripts/release/signing.py exec sh -c '
+  make release-prepare &&
+  python3 scripts/release/signing.py verify-release vX.Y.Z
+'
 ```
 
-The command creates both release commits and the annotated release tag using an
-isolated Git configuration, then removes its temporary signing files. Do not change
-or replace existing release tags. A failed verification blocks publication.
+Replace `vX.Y.Z` with the release tag. Run the policy check before importing
+credentials. The isolated invocation creates both release commits and the annotated
+release tag, then verifies all three against the public certificate while the
+release baseline and verification keyring are available. It removes its temporary
+signing files after verification. Do not change or replace existing release tags.
+A failed verification blocks publication.
 
 Consumers should obtain this public certificate from this repository at a reviewed
 commit, check the certification fingerprint above through a trusted channel, and
