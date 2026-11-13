@@ -375,6 +375,14 @@ val emptyJoin = internalJoin.toEmptyCassandraRDD // Makes an EmptyRDD
 The following options can be specified in the SparkConf object or as 
  `--conf` flag to spark-submit to adjust the read parameters of a Cassandra table.
 
+Reads, including scans and direct lookups, default to `LOCAL_QUORUM`, as do writes.
+A read therefore requires responses from a quorum of replicas in the local datacenter.
+Compared with `LOCAL_ONE`, this changes the availability and latency tradeoff: a
+single available replica is no longer sufficient when the local replication factor
+is greater than one. To retain the previous read behavior, explicitly set
+`spark.cassandra.input.consistency.level=LOCAL_ONE`. An explicitly supplied
+`ReadConf` can also select a different consistency level.
+
 See [Reference Section](reference.md#read-tuning-parameters)
 
 ### Using Implicits for Configuration
@@ -393,7 +401,7 @@ object ReadConfigurationOne {
 import ReadConfigurationOne._
 val rdd = sc.cassandraTable("write_test","collections")
 rdd.readConf
-//com.datastax.spark.connector.rdd.ReadConf = ReadConf(100,100,LOCAL_ONE,true)
+//com.datastax.spark.connector.rdd.ReadConf = ReadConf(100,100,LOCAL_QUORUM,true)
 ```
    
 Or you can define them implicitly in the same block as the `cassandraTable` call
@@ -402,7 +410,7 @@ Or you can define them implicitly in the same block as the `cassandraTable` call
 implicit val anotherConf = ReadConf(200,200)
 val rddWithADifferentConf = sc.cassandraTable("write_test","collections")
 rddWithADifferentConf.readConf
-//com.datastax.spark.connector.rdd.ReadConf = ReadConf(200,200,LOCAL_ONE,true)
+//com.datastax.spark.connector.rdd.ReadConf = ReadConf(200,200,LOCAL_QUORUM,true)
 ```
 
 [Next - Server-side data selection and filtering](3_selection.md)

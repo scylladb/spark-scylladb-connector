@@ -1,4 +1,5 @@
 Unreleased
+ * Default reads to LOCAL_QUORUM, matching writes; retain LOCAL_ONE through an explicit read override (#127)
  * Restrict release-note label cleanup to confirmed pull requests
  * Automatically omit verified support-only PRs from generated GitHub release notes
  * Sign release artifacts, commits and tags with the repository-specific protected signing subkey (#123)
