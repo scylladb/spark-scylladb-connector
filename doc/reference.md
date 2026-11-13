@@ -301,13 +301,61 @@ columname will be used to set the writetime for that row.</td>
 </table>
 
 
+## Client Routes (Private Endpoint) Connection Options
+<table class="table">
+<tr><th>Property Name</th><th>Default</th><th>Description</th></tr>
+<tr>
+  <td><code>spark.cassandra.connection.clientRoutes.endpoints</code></td>
+  <td>None</td>
+  <td>Enables client routes, which reach a ScyllaDB Cloud cluster (ScyllaDB 2026.1+) through private endpoints
+(AWS PrivateLink, GCP Private Service Connect). Comma-separated list of the connection IDs of your private
+connections, as shown in the ScyllaDB Cloud console. A connection ID belongs to one availability zone of one
+datacenter: list the IDs of every availability zone of the local datacenter, which together must route all of
+its nodes. IDs of other datacenters are allowed and not used. An ID may be followed by <code>=address</code> to
+replace the address published for that connection by a hostname or IP address without port, e.g.
+<code>id-dc1-az1,id-dc1-az2=10.0.0.5</code>. Set spark.cassandra.connection.host to your private endpoint
+addresses, all of which are contact points, and spark.cassandra.connection.port to the endpoint port, which is
+not necessarily 9042; an address may also be given as <code>address:port</code>. Without
+spark.cassandra.connection.localDC, the local datacenter is the one of the nodes that have a client route; set
+it when the routes cover several datacenters. Cannot be combined with a cloud bundle or a driver profile
+file.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.connection.clientRoutes.nativeTransportPort</code></td>
+  <td>9042</td>
+  <td>The native transport (CQL) port of the nodes themselves, not of the private endpoint. ScyllaDB does not
+publish it in its system tables, and the driver needs it to match the cluster's topology and status events to
+nodes. Change it only when the nodes do not listen on 9042.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.connection.clientRoutes.shardAwareness</code></td>
+  <td>false</td>
+  <td>Enables the driver's advanced shard awareness through private endpoints: each connection is opened from a
+client source port that targets a shard. Off by default on the client side, as in the driver. ScyllaDB Cloud
+private endpoints support it, so set it to true there; leave it false behind a proxy that does not preserve
+the client source port, such as one without Proxy Protocol v2. Basic shard awareness works either way:
+requests go to a connection of the shard that owns the data.</td>
+</tr>
+<tr>
+  <td><code>spark.cassandra.connection.clientRoutes.verify</code></td>
+  <td>true</td>
+  <td>Check, when the Spark driver connects, that every node of the local datacenter has a client route with the
+port the driver uses (<code>tls_port</code> when SSL is enabled, <code>port</code> otherwise), and fail
+otherwise. Without a usable route the driver silently falls back to the node's own address, which is usually
+not reachable through a private endpoint.</td>
+</tr>
+</table>
+
+
 ## Continuous Paging
 <table class="table">
 <tr><th>Property Name</th><th>Default</th><th>Description</th></tr>
 <tr>
   <td><code>spark.dse.continuousPagingEnabled</code></td>
   <td>true</td>
-  <td>Enables DSE Continuous Paging which improves scanning performance</td>
+  <td>Deprecated, has no effect: the ScyllaDB Java Driver 4.19.2.3 and newer only negotiates OSS protocol versions,
+so scans never use DSE Continuous Paging. Still accepted, with a warning, so that configurations that set it
+remain valid.</td>
 </tr>
 </table>
 

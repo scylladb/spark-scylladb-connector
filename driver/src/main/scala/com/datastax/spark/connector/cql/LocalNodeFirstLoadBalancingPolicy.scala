@@ -18,7 +18,7 @@
 
 package com.datastax.spark.connector.cql
 
-import java.net.{InetSocketAddress, NetworkInterface}
+import java.net.{InetSocketAddress, NetworkInterface, UnknownHostException}
 import java.nio.ByteBuffer
 import java.util
 import java.util.UUID
@@ -31,7 +31,7 @@ import com.datastax.oss.driver.api.core.metadata.token.Token
 import com.datastax.oss.driver.api.core.metadata.{Node, NodeState}
 import com.datastax.oss.driver.api.core.session.{Request, Session}
 import com.datastax.oss.driver.internal.core.context.InternalDriverContext
-import com.datastax.oss.driver.internal.core.metadata.MetadataManager
+import com.datastax.oss.driver.internal.core.metadata.{ClientRoutesEndPoint, ClientRoutesTopologyMonitor, MetadataManager}
 import com.datastax.oss.driver.internal.core.util.Reflection
 import com.datastax.oss.driver.internal.core.util.collection.SimpleQueryPlan
 import com.datastax.spark.connector.cql.LocalNodeFirstLoadBalancingPolicy.{LoadBalancingShuffleNodes, _}
@@ -72,16 +72,46 @@ class LocalNodeFirstLoadBalancingPolicy(context: DriverContext, profileName: Str
       NodeDistance.IGNORED
     }
 
+  /** The data center this policy sends requests to, known once the policy is initialized. */
+  def localDataCenter: String = dcToUse
+
   override def init(nodes: util.Map[UUID, Node], distanceReporter: LoadBalancingPolicy.DistanceReporter): Unit = {
     this.nodes = nodes.asScala.values.toSet
-    // use explicitly set DC if available, otherwise see if all contact points have same DC
-    // if so, use that DC; if not, throw an error
-    val contactPoints = metadataManager.getContactPoints.asScala.flatMap(toAddress).toSet
-    dcToUse = localDC.getOrElse(determineDataCenter(contactPoints, this.nodes))
+    dcToUse = localDC.getOrElse(inferDataCenter())
     this.distanceReporter = distanceReporter
 
     this.nodes.foreach { node =>
       distanceReporter.setDistance(node, distance(node))
+    }
+  }
+
+  /** Without an explicitly set DC, uses the DC of the nodes reached through client routes, if any. Otherwise checks
+    * whether all contact points have the same DC, and if so uses that DC; if not, throws an error.
+    *
+    * Client routes rewrite every node address, so contact points (private endpoint addresses) cannot be matched with
+    * nodes by address. Contact points are not matched by host ID either: they are separate nodes without one.
+    *
+    * When no node has a usable route, the control node keeps the contact point it was reached through as its address,
+    * so the address match usually still finds the local DC, and the client routes verification then reports the
+    * missing routes. Only if that match fails too does this fail, with a client routes specific message. */
+  private def inferDataCenter(): String = {
+    val clientRoutesMonitor = context.asInstanceOf[InternalDriverContext].getTopologyMonitor match {
+      case monitor: ClientRoutesTopologyMonitor => Some(monitor)
+      case _ => None
+    }
+    val routedDCs = clientRoutesMonitor.map(clientRoutesDataCenters(_, nodes)).getOrElse(Set.empty[String])
+    if (routedDCs.size > 1)
+      throw new IllegalArgumentException(s"Client routes cover datacenters ${routedDCs.toSeq.sorted.mkString(", ")}; " +
+        s"set spark.cassandra.connection.localDC")
+    routedDCs.headOption.getOrElse {
+      val contactPoints = metadataManager.getContactPoints.asScala.flatMap(toAddress).toSet
+      if (clientRoutesMonitor.isDefined && contactPointDataCenters(contactPoints, nodes).isEmpty)
+        throw new IllegalArgumentException(
+          "Cannot determine the local datacenter: no node has a usable client route for the configured connection " +
+            "IDs, and no node matches a contact point address. Check spark.cassandra.connection.clientRoutes.endpoints " +
+            "and that the routes publish the port the connection needs (tls_port when SSL is enabled), or set " +
+            "spark.cassandra.connection.localDC to get a report of the nodes without a usable route.")
+      determineDataCenter(contactPoints, nodes)
     }
   }
 
@@ -175,9 +205,39 @@ object LocalNodeFirstLoadBalancingPolicy {
   private val localAddresses =
     NetworkInterface.getNetworkInterfaces.asScala.flatMap(_.getInetAddresses.asScala).toSet
 
-  /** Returns true if given host is local host */
-  def isLocalHost(node: Node): Boolean = {
-    toAddress(node).exists(hostAddress => hostAddress.getAddress.isLoopbackAddress || localAddresses.contains(hostAddress.getAddress))
+  /** Returns true if given host is local host.
+    *
+    * A node reached through a client route (a private endpoint) is never local: no executor runs on the database nodes
+    * behind it. Checking it would also resolve the route address for every replica of every query plan. */
+  def isLocalHost(node: Node): Boolean = node.getEndPoint match {
+    case _: ClientRoutesEndPoint => false
+    case _ =>
+      toAddress(node).exists(hostAddress => hostAddress.getAddress.isLoopbackAddress || localAddresses.contains(hostAddress.getAddress))
+  }
+
+  /** Returns the data centers of the nodes that have a client route.
+    *
+    * Relies on the driver's internal [[ClientRoutesTopologyMonitor]], which resolves the routes of the configured
+    * connection IDs. A connection ID belongs to one availability zone of one data center, so the connection IDs of a
+    * data center (one per availability zone) together identify that data center.
+    *
+    * `resolve` returns null without a DNS lookup for a node without a route, but looks the route's address up in DNS
+    * otherwise, so the check stops at the first routed node of each data center: at most one lookup per data center,
+    * which the driver performs anyway when it connects to that node.
+    *
+    * @throws IllegalStateException if the monitor is closed, which `resolve` reports before looking for a route */
+  def clientRoutesDataCenters(monitor: ClientRoutesTopologyMonitor, allNodes: Set[Node]): Set[String] = {
+    def hasRoute(hostId: UUID): Boolean =
+      try monitor.resolve(hostId) != null
+      catch {
+        // Thrown once the route is found, when its address does not resolve
+        case _: UnknownHostException => true
+      }
+
+    allNodes
+      .groupBy(node => Option(node.getDatacenter))
+      .collect { case (Some(dc), dcNodes) if dcNodes.exists(node => Option(node.getHostId).exists(hasRoute)) => dc }
+      .toSet
   }
 
   /** Sorts nodes in the following order:
@@ -205,14 +265,19 @@ object LocalNodeFirstLoadBalancingPolicy {
     * name. If contact points belong to more than a single data center, an [[IllegalArgumentException]] is thrown.
     */
   def determineDataCenter(contactPoints: Set[InetSocketAddress], allNodes: Set[Node]): String = {
-    val maybeResolved = contactPoints.map(x =>
-      if (x.isUnresolved) new InetSocketAddress(x.getHostString, x.getPort) else x)
-    val dcs = allNodes
-      .filter(node => toAddress(node).exists(maybeResolved.contains))
-      .flatMap(node => Option(node.getDatacenter))
+    val dcs = contactPointDataCenters(contactPoints, allNodes)
     assert(dcs.nonEmpty, "There are no contact points in the given set of hosts")
     require(dcs.size == 1, s"Contact points contain multiple data centers: ${dcs.mkString(", ")}")
     dcs.head
+  }
+
+  /** Returns the data centers of the nodes whose address is one of the given contact points. */
+  private def contactPointDataCenters(contactPoints: Set[InetSocketAddress], allNodes: Set[Node]): Set[String] = {
+    val maybeResolved = contactPoints.map(x =>
+      if (x.isUnresolved) new InetSocketAddress(x.getHostString, x.getPort) else x)
+    allNodes
+      .filter(node => toAddress(node).exists(maybeResolved.contains))
+      .flatMap(node => Option(node.getDatacenter))
   }
 
   val LoadBalancingShuffleNodes: DriverOption = new DriverOption {

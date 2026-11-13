@@ -1,4 +1,24 @@
 Unreleased
+ * Support ScyllaDB Cloud private endpoints (AWS PrivateLink, GCP Private Service Connect) through the driver's
+   client routes: spark.cassandra.connection.clientRoutes.* settings and CassandraConnectorConf.clientRoutes
+   (binary incompatible change of CassandraConnectorConf)
+ * Check on the Spark driver that client routes cover every node of the local datacenter
+   (spark.cassandra.connection.clientRoutes.verify)
+ * With client routes, infer the local datacenter from the routed nodes when spark.cassandra.connection.localDC
+   is not set, and never treat routed nodes as local to an executor
+ * repartitionByCassandraReplica identifies nodes by host ID instead of IP address, so nodes that share an address,
+   as behind a private endpoint, keep partitionsPerHost partitions each
+ * Upgrade ScyllaDB Java Driver to 4.19.4.0. It skips an unusable client route on its own instead of dropping every
+   route. It no longer supports DataStax Astra secure connect bundles, so
+   spark.cassandra.connection.config.cloud.path now fails the connection; DSE proxy execution, so ReadConf and
+   WriteConf reject executeAs; DSE protocol versions, so DSE clusters are scanned without continuous paging
+   (spark.dse.continuousPagingEnabled is ignored, with a warning) and spark.cassandra.input.readsPerSec no longer
+   limits their scans, as it never did for ScyllaDB and Cassandra; nor the DSE-only geometry and DateRange types. Two
+   driver defaults change: once a reconnection round has exhausted the live nodes, the control connection also tries
+   the contact points (advanced.control-connection.reconnection.fallback-to-original-contact-points); and a driver
+   profile file (spark.cassandra.connection.config.profile.path) that does not set basic.request.timeout now times
+   requests out after 11 seconds instead of 2, while other sessions keep spark.cassandra.read.timeoutMS
+ * Declare joda-time and scala-collection-compat as runtime dependencies in the published POM
  * Restrict release-note label cleanup to confirmed pull requests
  * Automatically omit verified support-only PRs from generated GitHub release notes
  * Sign release artifacts, commits and tags with the repository-specific protected signing subkey (#123)

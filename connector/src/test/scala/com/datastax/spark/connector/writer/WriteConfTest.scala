@@ -144,4 +144,14 @@ class WriteConfTest extends FlatSpec with Matchers {
     optionsAsColumns("ks", "tbl").map(_.columnName) should contain("ttl_col")
   }
 
+  it should "reject executeAs, which the driver no longer supports" in {
+    val error = intercept[IllegalArgumentException](WriteConf(executeAs = Some("someone")))
+    error.getMessage should include("executeAs (DSE proxy execution) is not supported")
+  }
+
+  "ReadConf" should "reject executeAs, which the driver no longer supports" in {
+    val error = intercept[IllegalArgumentException](com.datastax.spark.connector.rdd.ReadConf(executeAs = Some("someone")))
+    error.getMessage should include("executeAs (DSE proxy execution) is not supported")
+  }
+
 }
