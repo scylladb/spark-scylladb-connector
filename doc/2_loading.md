@@ -379,9 +379,19 @@ Reads, including scans and direct lookups, default to `LOCAL_QUORUM`, as do writ
 A read therefore requires responses from a quorum of replicas in the local datacenter.
 Compared with `LOCAL_ONE`, this changes the availability and latency tradeoff: a
 single available replica is no longer sufficient when the local replication factor
-is greater than one. To retain the previous read behavior, explicitly set
-`spark.cassandra.input.consistency.level=LOCAL_ONE`. An explicitly supplied
-`ReadConf` can also select a different consistency level.
+is greater than one. For reads configured through `ReadConf.fromSparkConf`, retain
+the previous behavior by setting `spark.cassandra.input.consistency.level=LOCAL_ONE`.
+An explicitly constructed `ReadConf(...)` does not read that Spark property: its
+omitted `consistencyLevel` argument now defaults to `LOCAL_QUORUM`. If you supply
+your own implicit `ReadConf` or pass one to `withReadConf`, select `LOCAL_ONE`
+explicitly to retain the previous behavior:
+
+```scala
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel.LOCAL_ONE
+import com.datastax.spark.connector.rdd.ReadConf
+
+val legacyReadConf = ReadConf(consistencyLevel = LOCAL_ONE)
+```
 
 Serial consistency for conditional (LWT) writes is a separate Java driver setting.
 The connector does not override it; the current driver default remains `SERIAL`.
