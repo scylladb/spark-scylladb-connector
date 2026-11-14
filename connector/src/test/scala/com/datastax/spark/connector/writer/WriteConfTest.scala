@@ -30,7 +30,8 @@ class WriteConfTest extends FlatSpec with Matchers {
     val writeConf = WriteConf.fromSparkConf(conf)
 
     writeConf.batchSize should be (BytesInBatch(WriteConf.BatchSizeBytesParam.default))
-    writeConf.consistencyLevel should be (WriteConf.ConsistencyLevelParam.default)
+    writeConf.consistencyLevel should be (DefaultConsistencyLevel.LOCAL_QUORUM)
+    WriteConf().consistencyLevel should be (DefaultConsistencyLevel.LOCAL_QUORUM)
     writeConf.parallelismLevel should be (WriteConf.ParallelismLevelParam.default)
   }
 

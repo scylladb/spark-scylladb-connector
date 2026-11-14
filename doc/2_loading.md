@@ -375,6 +375,34 @@ val emptyJoin = internalJoin.toEmptyCassandraRDD // Makes an EmptyRDD
 The following options can be specified in the SparkConf object or as 
  `--conf` flag to spark-submit to adjust the read parameters of a Cassandra table.
 
+Reads, including scans and direct lookups, default to `LOCAL_QUORUM`, as do writes.
+A read therefore requires responses from a quorum of replicas in the local datacenter.
+Compared with `LOCAL_ONE`, this changes the availability and latency tradeoff: a
+single available replica is no longer sufficient when the local replication factor
+is greater than one. For reads configured through `ReadConf.fromSparkConf`, retain
+the previous behavior by setting `spark.cassandra.input.consistency.level=LOCAL_ONE`.
+An explicitly constructed `ReadConf(...)` does not read that Spark property: its
+omitted `consistencyLevel` argument now defaults to `LOCAL_QUORUM`. If you supply
+your own implicit `ReadConf` or pass one to `withReadConf`, select `LOCAL_ONE`
+explicitly to retain the previous behavior:
+
+```scala
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel.LOCAL_ONE
+import com.datastax.spark.connector.rdd.ReadConf
+
+val legacyReadConf = ReadConf(consistencyLevel = LOCAL_ONE)
+```
+
+Serial consistency for conditional (LWT) writes is a separate Java driver setting.
+The connector does not override it; the current driver default remains `SERIAL`.
+If you require `LOCAL_SERIAL`, set
+`datastax-java-driver.basic.request.serial-consistency = LOCAL_SERIAL` in a
+[Java driver configuration profile](1_connecting.md#connecting-using-an-astra-cloud-bundle-or-driver-profile-file-since-scc-25).
+A profile replaces the other connector connection settings, so include the
+connection details it needs. Adoption of a released driver with a `LOCAL_SERIAL`
+default is tracked in [#127](https://github.com/scylladb/spark-scylladb-connector/issues/127);
+this read-default change does not provide that dependency update.
+
 See [Reference Section](reference.md#read-tuning-parameters)
 
 ### Using Implicits for Configuration
@@ -387,22 +415,28 @@ code rather than repeatedly passing the same
 
 #### Example Using Implicits for Read Configuration
 ```scala
+import com.datastax.spark.connector.rdd.ReadConf
+
 object ReadConfigurationOne {
-  implicit val readConf = ReadConf(100,100)
+  implicit val readConf: ReadConf = ReadConf(splitSizeInMB = 100, fetchSizeInRows = 100)
 }
-import ReadConfigurationOne._
-val rdd = sc.cassandraTable("write_test","collections")
-rdd.readConf
-//com.datastax.spark.connector.rdd.ReadConf = ReadConf(100,100,LOCAL_ONE,true)
+val rdd = {
+  import ReadConfigurationOne._
+  sc.cassandraTable("write_test","collections")
+}
+rdd.readConf.consistencyLevel
+// com.datastax.oss.driver.api.core.ConsistencyLevel = LOCAL_QUORUM
 ```
    
 Or you can define them implicitly in the same block as the `cassandraTable` call
 
 ```scala
-implicit val anotherConf = ReadConf(200,200)
-val rddWithADifferentConf = sc.cassandraTable("write_test","collections")
-rddWithADifferentConf.readConf
-//com.datastax.spark.connector.rdd.ReadConf = ReadConf(200,200,LOCAL_ONE,true)
+val rddWithADifferentConf = {
+  implicit val anotherConf: ReadConf = ReadConf(splitSizeInMB = 200, fetchSizeInRows = 200)
+  sc.cassandraTable("write_test","collections")
+}
+rddWithADifferentConf.readConf.consistencyLevel
+// com.datastax.oss.driver.api.core.ConsistencyLevel = LOCAL_QUORUM
 ```
 
 [Next - Server-side data selection and filtering](3_selection.md)

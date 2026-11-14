@@ -18,7 +18,7 @@
 
 package com.datastax.spark.connector.cql
 
-import java.net.InetSocketAddress
+import java.net.{InetAddress, InetSocketAddress}
 import java.util.function.Predicate
 import java.util.{Optional, UUID}
 
@@ -38,7 +38,7 @@ import org.scalatestplus.mockito.MockitoSugar
 import scala.jdk.CollectionConverters._
 
 class NodeFilter(context: DriverContext, profileName: String) extends Predicate[Node] {
-  override def test(t: Node): Boolean = DriverUtil.toAddress(t).get.getHostName.equals("192.168.123.2")
+  override def test(t: Node): Boolean = DriverUtil.toAddress(t).get.getAddress.getHostAddress.equals("192.168.123.2")
 }
 
 class LocalNodeFirstLoadBalancingPolicySpec extends FlatSpec with Matchers with MockitoSugar with BeforeAndAfterEach {
@@ -50,12 +50,14 @@ class LocalNodeFirstLoadBalancingPolicySpec extends FlatSpec with Matchers with 
   private val remoteNode3 = nodeMock("192.168.123.3")
 
   def nodeMock(address: String): Node = {
+    val inetAddress = InetAddress.getByAddress("node.example", InetAddress.getByName(address).getAddress)
+    val socketAddress = new InetSocketAddress(inetAddress, 9042)
     val endpoint = mock[EndPoint]
-    when(endpoint.resolve).thenReturn(new InetSocketAddress(address, 9042))
+    when(endpoint.resolve).thenReturn(socketAddress)
 
     val node = mock[Node]
     when(node.getHostId).thenReturn(UUID.randomUUID())
-    when(node.getBroadcastAddress).thenReturn(Optional.of(new InetSocketAddress(address, 9042)))
+    when(node.getBroadcastAddress).thenReturn(Optional.of(socketAddress))
     when(node.getEndPoint).thenReturn(endpoint)
     when(node.getDatacenter).thenReturn(dc)
     node

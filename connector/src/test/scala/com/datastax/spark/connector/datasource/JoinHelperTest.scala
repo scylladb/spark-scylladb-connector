@@ -18,12 +18,18 @@
 
 package com.datastax.spark.connector.datasource
 
+import com.datastax.oss.driver.api.core.{CqlSession, DefaultConsistencyLevel}
+import com.datastax.oss.driver.api.core.cql.{PreparedStatement, SimpleStatement}
 import com.datastax.spark.connector.{ColumnName, SomeColumns}
 import com.datastax.spark.connector.cql.{ClusteringColumn, ColumnDef, PartitionKeyColumn, RegularColumn, TableDef}
 import com.datastax.spark.connector.datasource.ScanHelper.CqlQueryParts
-import com.datastax.spark.connector.rdd.CqlWhereClause
+import com.datastax.spark.connector.rdd.{CqlWhereClause, ReadConf}
 import com.datastax.spark.connector.types.{IntType, TextType}
+import org.apache.spark.SparkConf
 import org.junit.{Assert, Test}
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.{any => anyArg}
+import org.mockito.Mockito._
 
 class JoinHelperTest {
 
@@ -37,6 +43,29 @@ class JoinHelperTest {
   private val queryParts = CqlQueryParts(
     selectedColumnRefs = SomeColumns("UserId", "value").selectFrom(tableDef),
     whereClause = CqlWhereClause.empty)
+
+  @Test
+  def joinPreparationShouldUseDefaultAndOverriddenReadConsistency(): Unit = {
+    val overrideConf = new SparkConf(false)
+      .set("spark.cassandra.input.consistency.level", "LOCAL_ONE")
+    val configs = Seq(
+      ReadConf.fromSparkConf(new SparkConf(false)) -> DefaultConsistencyLevel.LOCAL_QUORUM,
+      ReadConf.fromSparkConf(overrideConf) -> DefaultConsistencyLevel.LOCAL_ONE)
+
+    for ((readConf, expectedConsistency) <- configs) {
+      val session = mock(classOf[CqlSession])
+      val prepared = mock(classOf[PreparedStatement])
+      when(session.prepare(anyArg[SimpleStatement]())).thenReturn(prepared)
+      val query = JoinHelper.getJoinQueryString(tableDef, Seq(ColumnName("UserId")), queryParts)
+
+      Assert.assertSame(prepared, JoinHelper.getJoinPreparedStatement(session, query, readConf.consistencyLevel))
+
+      val captured = ArgumentCaptor.forClass(classOf[SimpleStatement])
+      verify(session).prepare(captured.capture())
+      Assert.assertEquals(query, captured.getValue.getQuery)
+      Assert.assertEquals(expectedConsistency, captured.getValue.getConsistencyLevel)
+    }
+  }
 
   @Test
   def joinQueryShouldQuoteCaseSensitiveBindMarkers(): Unit = {

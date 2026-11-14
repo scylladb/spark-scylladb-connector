@@ -70,8 +70,8 @@ import scala.jdk.CollectionConverters._
   * If a Cassandra node fails or gets overloaded during read, the queries are retried
   * to a different node.
   *
-  * By default, reads are performed at ConsistencyLevel.LOCAL_ONE in order to leverage data-locality
-  * and minimize network traffic. This read consistency level is controlled by the
+  * By default, reads are performed at ConsistencyLevel.LOCAL_QUORUM.
+  * This read consistency level is controlled by the
   * spark.cassandra.input.consistency.level property.
   */
 class CassandraTableScanRDD[R] private[connector](
