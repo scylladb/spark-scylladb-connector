@@ -383,6 +383,16 @@ is greater than one. To retain the previous read behavior, explicitly set
 `spark.cassandra.input.consistency.level=LOCAL_ONE`. An explicitly supplied
 `ReadConf` can also select a different consistency level.
 
+Serial consistency for conditional (LWT) writes is a separate Java driver setting.
+The connector does not override it; the current driver default remains `SERIAL`.
+If you require `LOCAL_SERIAL`, set
+`datastax-java-driver.basic.request.serial-consistency = LOCAL_SERIAL` in a
+[Java driver configuration profile](1_connecting.md#connecting-using-an-astra-cloud-bundle-or-driver-profile-file-since-scc-25).
+A profile replaces the other connector connection settings, so include the
+connection details it needs. Adoption of a released driver with a `LOCAL_SERIAL`
+default is tracked in [#127](https://github.com/scylladb/spark-scylladb-connector/issues/127);
+this read-default change does not provide that dependency update.
+
 See [Reference Section](reference.md#read-tuning-parameters)
 
 ### Using Implicits for Configuration
