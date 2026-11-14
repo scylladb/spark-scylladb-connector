@@ -21,7 +21,7 @@ package com.datastax.spark.connector.datasource
 import java.io.IOException
 import java.util.Arrays
 
-import com.datastax.oss.driver.api.core.{ConsistencyLevel, CqlSession}
+import com.datastax.oss.driver.api.core.{ConsistencyLevel, CqlSession, DefaultConsistencyLevel}
 import com.datastax.oss.driver.api.core.cql.{BoundStatement, ColumnDefinition, ColumnDefinitions, PreparedStatement}
 import com.datastax.oss.driver.api.core.metadata.token.{Token => NativeToken}
 import com.datastax.oss.driver.api.core.`type`.DataTypes
@@ -33,6 +33,7 @@ import com.datastax.spark.connector.rdd.{CqlWhereClause, ReadConf}
 import com.datastax.spark.connector.rdd.partitioner.{CassandraPartition, CqlTokenRange}
 import com.datastax.spark.connector.rdd.partitioner.dht.{LongToken, TokenFactory, TokenRange}
 import com.datastax.spark.connector.types.{IntType, TextType}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.mockito.ArgumentMatchers.{any => anyArg, anyInt}
 import org.mockito.Mockito._
@@ -82,46 +83,55 @@ class ScanHelperSpec extends FlatSpec with Matchers with MockitoSugar {
     verify(session, times(1)).prepare(twoBindCql)
   }
 
-  it should "scan mixed token range CQL templates through the partition reader cache" in {
-    val oneBindRange = tokenRange(tokenFactory.minToken, tokenFactory.minToken)
-    val twoBindRange = tokenRange(LongToken(0L), LongToken(10L))
-    val (oneBindCql, _) = ScanHelper.tokenRangeToCqlQuery(oneBindRange, tableDef, queryParts)
-    val (twoBindCql, _) = ScanHelper.tokenRangeToCqlQuery(twoBindRange, tableDef, queryParts)
-    val connector = mock[CassandraConnector]
-    val connectionFactory = mock[CassandraConnectionFactory]
-    val connectorConf = mock[CassandraConnectorConf]
-    val scanner = mock[Scanner]
-    val session = mock[CqlSession]
-    val metadata = CassandraRowMetadata(IndexedSeq("id", "value"))
-    val oneBindBoundStatement = boundStatement()
-    val twoBindBoundStatement = boundStatement()
-    val oneBindStatement = preparedStatementWithVariables(1, oneBindBoundStatement)
-    val twoBindStatement = preparedStatementWithVariables(2, twoBindBoundStatement)
-    val readConf = ReadConf()
-    val partition = CassandraPartition(0, Array.empty[String], Seq(oneBindRange, twoBindRange), 0L)
-    val readerFactory = CassandraScanPartitionReaderFactory(connector, tableDef, schema, readConf, queryParts)
+  it should "scan mixed token ranges with default and overridden consistency through the partition reader cache" in {
+    val overrideConf = new SparkConf(false)
+      .set("spark.cassandra.input.consistency.level", "LOCAL_ONE")
+    val configs = Seq(
+      ReadConf.fromSparkConf(new SparkConf(false)) -> DefaultConsistencyLevel.LOCAL_QUORUM,
+      ReadConf.fromSparkConf(overrideConf) -> DefaultConsistencyLevel.LOCAL_ONE)
 
-    when(connector.connectionFactory).thenReturn(connectionFactory)
-    when(connector.conf).thenReturn(connectorConf)
-    when(connectionFactory.getScanner(readConf, connectorConf, IndexedSeq("id", "value")))
-      .thenReturn(scanner)
-    when(scanner.getSession()).thenReturn(session)
-    when(session.prepare(oneBindCql)).thenReturn(oneBindStatement)
-    when(session.prepare(twoBindCql)).thenReturn(twoBindStatement)
-    when(scanner.scan(oneBindBoundStatement)).thenReturn(ScanResult(Iterator.empty, metadata))
-    when(scanner.scan(twoBindBoundStatement)).thenReturn(ScanResult(Iterator.empty, metadata))
+    for ((readConf, expectedConsistency) <- configs) {
+      val oneBindRange = tokenRange(tokenFactory.minToken, tokenFactory.minToken)
+      val twoBindRange = tokenRange(LongToken(0L), LongToken(10L))
+      val (oneBindCql, _) = ScanHelper.tokenRangeToCqlQuery(oneBindRange, tableDef, queryParts)
+      val (twoBindCql, _) = ScanHelper.tokenRangeToCqlQuery(twoBindRange, tableDef, queryParts)
+      val connector = mock[CassandraConnector]
+      val connectionFactory = mock[CassandraConnectionFactory]
+      val connectorConf = mock[CassandraConnectorConf]
+      val scanner = mock[Scanner]
+      val session = mock[CqlSession]
+      val metadata = CassandraRowMetadata(IndexedSeq("id", "value"))
+      val oneBindBoundStatement = boundStatement()
+      val twoBindBoundStatement = boundStatement()
+      val oneBindStatement = preparedStatementWithVariables(1, oneBindBoundStatement)
+      val twoBindStatement = preparedStatementWithVariables(2, twoBindBoundStatement)
+      val partition = CassandraPartition(0, Array.empty[String], Seq(oneBindRange, twoBindRange), 0L)
+      val readerFactory = CassandraScanPartitionReaderFactory(connector, tableDef, schema, readConf, queryParts)
 
-    val reader = readerFactory.createReader(partition)
+      when(connector.connectionFactory).thenReturn(connectionFactory)
+      when(connector.conf).thenReturn(connectorConf)
+      when(connectionFactory.getScanner(readConf, connectorConf, IndexedSeq("id", "value")))
+        .thenReturn(scanner)
+      when(scanner.getSession()).thenReturn(session)
+      when(session.prepare(oneBindCql)).thenReturn(oneBindStatement)
+      when(session.prepare(twoBindCql)).thenReturn(twoBindStatement)
+      when(scanner.scan(oneBindBoundStatement)).thenReturn(ScanResult(Iterator.empty, metadata))
+      when(scanner.scan(twoBindBoundStatement)).thenReturn(ScanResult(Iterator.empty, metadata))
 
-    reader.next() shouldBe false
+      val reader = readerFactory.createReader(partition)
 
-    verify(session, times(1)).prepare(oneBindCql)
-    verify(session, times(1)).prepare(twoBindCql)
-    verify(oneBindStatement, times(1)).bind(anyArg[Object]())
-    verify(twoBindStatement, times(1)).bind(anyArg[Object](), anyArg[Object]())
-    verify(scanner, times(1)).scan(oneBindBoundStatement)
-    verify(scanner, times(1)).scan(twoBindBoundStatement)
-    reader.close()
+      reader.next() shouldBe false
+
+      verify(session, times(1)).prepare(oneBindCql)
+      verify(session, times(1)).prepare(twoBindCql)
+      verify(oneBindStatement, times(1)).bind(anyArg[Object]())
+      verify(twoBindStatement, times(1)).bind(anyArg[Object](), anyArg[Object]())
+      verify(scanner, times(1)).scan(oneBindBoundStatement)
+      verify(scanner, times(1)).scan(twoBindBoundStatement)
+      verify(oneBindBoundStatement).setConsistencyLevel(expectedConsistency)
+      verify(twoBindBoundStatement).setConsistencyLevel(expectedConsistency)
+      reader.close()
+    }
   }
 
   it should "reject bind value count mismatches before binding" in {

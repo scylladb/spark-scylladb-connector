@@ -408,7 +408,7 @@ class RDDSpec extends SparkCassandraITFlatSpecBase with DefaultCluster {
   it should "use the ReadConf from the SparkContext by default" in {
     val source = sc.parallelize(keys).map(x => (x, x * 100: Long))
     val someCass = source.joinWithCassandraTable[FullRow](ks, tableName)
-    someCass.readConf.consistencyLevel should be (DefaultConsistencyLevel.LOCAL_ONE)
+    someCass.readConf.consistencyLevel should be (DefaultConsistencyLevel.LOCAL_QUORUM)
   }
 
 

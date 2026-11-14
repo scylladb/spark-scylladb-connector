@@ -1,4 +1,7 @@
 Unreleased
+ * Default reads to LOCAL_QUORUM, matching writes (#127). To retain LOCAL_ONE,
+   set spark.cassandra.input.consistency.level=LOCAL_ONE for ReadConf.fromSparkConf;
+   explicitly constructed ReadConf instances must pass consistencyLevel = LOCAL_ONE.
  * Restrict release-note label cleanup to confirmed pull requests
  * Automatically omit verified support-only PRs from generated GitHub release notes
  * Sign release artifacts, commits and tags with the repository-specific protected signing subkey (#123)
