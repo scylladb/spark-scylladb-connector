@@ -395,22 +395,28 @@ code rather than repeatedly passing the same
 
 #### Example Using Implicits for Read Configuration
 ```scala
+import com.datastax.spark.connector.rdd.ReadConf
+
 object ReadConfigurationOne {
-  implicit val readConf = ReadConf(100,100)
+  implicit val readConf: ReadConf = ReadConf(splitSizeInMB = 100, fetchSizeInRows = 100)
 }
-import ReadConfigurationOne._
-val rdd = sc.cassandraTable("write_test","collections")
-rdd.readConf
-//com.datastax.spark.connector.rdd.ReadConf = ReadConf(100,100,LOCAL_QUORUM,true)
+val rdd = {
+  import ReadConfigurationOne._
+  sc.cassandraTable("write_test","collections")
+}
+rdd.readConf.consistencyLevel
+// com.datastax.oss.driver.api.core.ConsistencyLevel = LOCAL_QUORUM
 ```
    
 Or you can define them implicitly in the same block as the `cassandraTable` call
 
 ```scala
-implicit val anotherConf = ReadConf(200,200)
-val rddWithADifferentConf = sc.cassandraTable("write_test","collections")
-rddWithADifferentConf.readConf
-//com.datastax.spark.connector.rdd.ReadConf = ReadConf(200,200,LOCAL_QUORUM,true)
+val rddWithADifferentConf = {
+  implicit val anotherConf: ReadConf = ReadConf(splitSizeInMB = 200, fetchSizeInRows = 200)
+  sc.cassandraTable("write_test","collections")
+}
+rddWithADifferentConf.readConf.consistencyLevel
+// com.datastax.oss.driver.api.core.ConsistencyLevel = LOCAL_QUORUM
 ```
 
 [Next - Server-side data selection and filtering](3_selection.md)
