@@ -241,11 +241,10 @@ class CassandraConnectorSpec extends SparkCassandraITFlatSpecBase with DefaultCl
   }
 
   /**
-    * Once again we don't have a good way of testing the cloud connection either, so we are just
-    * testing to make sure that it is properly in the config. To this end we are going to use an
-    * invalid bundle and just make sure it is loaded.
+    * The ScyllaDB Java Driver no longer supports DataStax Astra cloud connect bundles (since 4.19.2.3), so these only
+    * check that the bundle setting reaches the driver, which rejects it.
     */
-  it should "use a cloud connect bundle added to --files" in {
+  it should "pass a cloud connect bundle added to --files to the driver, which rejects it" in {
     sc.addFile(ClassLoader.getSystemResource("test.conf").getFile)
 
     val conf = sc.getConf
@@ -256,12 +255,12 @@ class CassandraConnectorSpec extends SparkCassandraITFlatSpecBase with DefaultCl
       conn.withSessionDo(session => session.getContext)
     }
 
-    exception.getMessage should include ("Invalid bundle")
-    exception.getMessage should include ("missing file config.json")
+    exception.getMessage should include ("test.conf")
+    exception.getMessage should include ("DataStax Astra support has been removed")
   }
 
 
-  it should "use a cloud connect bundle added to URL" in {
+  it should "pass a cloud connect bundle added to URL to the driver, which rejects it" in {
     val url = ClassLoader.getSystemResource("test.conf")
 
     val conf = sc.getConf
@@ -272,8 +271,8 @@ class CassandraConnectorSpec extends SparkCassandraITFlatSpecBase with DefaultCl
       conn.withSessionDo(session => session.getContext)
     }
 
-    exception.getMessage should include ("Invalid bundle")
-    exception.getMessage should include ("missing file config.json")
+    exception.getMessage should include ("test.conf")
+    exception.getMessage should include ("DataStax Astra support has been removed")
   }
 
 

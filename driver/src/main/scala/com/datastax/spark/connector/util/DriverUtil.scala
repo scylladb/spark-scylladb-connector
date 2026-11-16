@@ -20,6 +20,7 @@ package com.datastax.spark.connector.util
 
 import java.net.{InetAddress, InetSocketAddress}
 import java.util.Optional
+import java.util.concurrent.ConcurrentHashMap
 
 import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.datastax.oss.driver.api.core.metadata.Node
@@ -41,5 +42,16 @@ object DriverUtil {
       }
       case _ => toOption(node.getBroadcastAddress)
     }
+  }
+
+  /** Returns a function that resolves the address of each node once, for callers that need the address of the same
+    * nodes many times.
+    *
+    * [[toAddress]] resolves the end point of the node on every call. For a node reached through a client route (a
+    * private endpoint), that looks the route's address up in DNS and makes a new address object each time, which has
+    * to look its host name up again. A resolution that fails is not remembered. */
+  def addressResolver(): Node => Option[InetSocketAddress] = {
+    val addresses = new ConcurrentHashMap[Node, Option[InetSocketAddress]]()
+    node => addresses.computeIfAbsent(node, (n: Node) => toAddress(n))
   }
 }

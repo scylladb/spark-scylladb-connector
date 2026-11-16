@@ -21,9 +21,11 @@ package com.datastax.spark.connector.cql
 import java.net.{InetAddress, InetSocketAddress}
 
 import scala.language.postfixOps
+import scala.util.Try
 import scala.util.control.NonFatal
 import org.apache.commons.lang3.builder.{EqualsBuilder, HashCodeBuilder}
 import org.apache.spark.SparkConf
+import com.datastax.oss.driver.api.core.config.ClientRoutesConfig
 import com.datastax.spark.connector.util.{ConfigCheck, ConfigParameter, DeprecatedConfigParameter, Logging}
 
 
@@ -68,7 +70,10 @@ case class ProfileFileBasedContactInfo(path: String) extends ContactInfo {
 }
 
 /** Stores configuration of a connection to Cassandra.
-  * Provides information about cluster nodes, ports and optional credentials for authentication. */
+  * Provides information about cluster nodes, ports and optional credentials for authentication.
+  *
+  * @param clientRoutes reach the cluster through ScyllaDB Cloud private endpoints, see [[ClientRoutesConf]];
+  *                     only supported with [[IpBasedContactInfo]] */
 case class CassandraConnectorConf(
   contactInfo: ContactInfo,
   localDC: Option[String] = CassandraConnectorConf.LocalDCParam.default,
@@ -85,7 +90,8 @@ case class CassandraConnectorConf(
   connectionFactory: CassandraConnectionFactory = DefaultConnectionFactory,
   quietPeriodBeforeCloseMillis: Int = CassandraConnectorConf.QuietPeriodBeforeCloseParam.default,
   timeoutBeforeCloseMillis: Int = CassandraConnectorConf.TimeoutBeforeCloseParam.default,
-  resolveContactPoints: Boolean = CassandraConnectorConf.ResolveContactPoints.default
+  resolveContactPoints: Boolean = CassandraConnectorConf.ResolveContactPoints.default,
+  clientRoutes: Option[ClientRoutesConf] = None
 ) {
 
   override def hashCode: Int = HashCodeBuilder.reflectionHashCode(this, false)
@@ -305,6 +311,56 @@ object CassandraConnectorConf extends Logging {
                     |URLs and references to files distributed via spark.files (--files) setting.""".stripMargin
   )
 
+  val ReferenceSectionClientRoutes = "Client Routes (Private Endpoint) Connection Options"
+
+  val ClientRoutesEndpointsParam = ConfigParameter[Option[String]](
+    name = "spark.cassandra.connection.clientRoutes.endpoints",
+    section = ReferenceSectionClientRoutes,
+    default = None,
+    description =
+      """Enables client routes, which reach a ScyllaDB Cloud cluster (ScyllaDB 2026.1+) through private endpoints
+        |(AWS PrivateLink, GCP Private Service Connect). Comma-separated list of the connection IDs of your private
+        |connections, as shown in the ScyllaDB Cloud console. A connection ID belongs to one availability zone of one
+        |datacenter: list the IDs of every availability zone of the local datacenter, which together must route all of
+        |its nodes. IDs of other datacenters are allowed and not used. An ID may be followed by <code>=address</code> to
+        |replace the address published for that connection by a hostname or IP address without port, e.g.
+        |<code>id-dc1-az1,id-dc1-az2=10.0.0.5</code>. Set spark.cassandra.connection.host to your private endpoint
+        |addresses, all of which are contact points, and spark.cassandra.connection.port to the endpoint port, which is
+        |not necessarily 9042; an address may also be given as <code>address:port</code>. Without
+        |spark.cassandra.connection.localDC, the local datacenter is the one of the nodes that have a client route; set
+        |it when the routes cover several datacenters. Cannot be combined with a cloud bundle or a driver profile
+        |file.""".stripMargin)
+
+  val ClientRoutesShardAwarenessParam = ConfigParameter[Boolean](
+    name = "spark.cassandra.connection.clientRoutes.shardAwareness",
+    section = ReferenceSectionClientRoutes,
+    default = false,
+    description =
+      """Enables the driver's advanced shard awareness through private endpoints: each connection is opened from a
+        |client source port that targets a shard. Off by default on the client side, as in the driver. ScyllaDB Cloud
+        |private endpoints support it, so set it to true there; leave it false behind a proxy that does not preserve
+        |the client source port, such as one without Proxy Protocol v2. Basic shard awareness works either way:
+        |requests go to a connection of the shard that owns the data.""".stripMargin)
+
+  val ClientRoutesVerifyParam = ConfigParameter[Boolean](
+    name = "spark.cassandra.connection.clientRoutes.verify",
+    section = ReferenceSectionClientRoutes,
+    default = true,
+    description =
+      """Check, when the Spark driver connects, that every node of the local datacenter has a client route with the
+        |port the driver uses (<code>tls_port</code> when SSL is enabled, <code>port</code> otherwise), and fail
+        |otherwise. Without a usable route the driver silently falls back to the node's own address, which is usually
+        |not reachable through a private endpoint.""".stripMargin)
+
+  val ClientRoutesNativeTransportPortParam = ConfigParameter[Int](
+    name = "spark.cassandra.connection.clientRoutes.nativeTransportPort",
+    section = ReferenceSectionClientRoutes,
+    default = ClientRoutesConfig.DEFAULT_NATIVE_TRANSPORT_PORT,
+    description =
+      """The native transport (CQL) port of the nodes themselves, not of the private endpoint. ScyllaDB does not
+        |publish it in its system tables, and the driver needs it to match the cluster's topology and status events to
+        |nodes. Change it only when the nodes do not listen on 9042.""".stripMargin)
+
   val ReferenceSectionSSL = "Cassandra SSL Connection Options"
   val DefaultCassandraSSLConf = CassandraSSLConf()
 
@@ -444,6 +500,59 @@ object CassandraConnectorConf extends Logging {
     IpBasedContactInfo(hosts, authConf, cassandraSSLConf)
   }
 
+  /** Reads the client routes settings.
+    *
+    * @return `None` when [[ClientRoutesEndpointsParam]] is not set
+    * @throws IllegalArgumentException if [[ClientRoutesEndpointsParam]] is malformed
+    */
+  def getClientRoutesFromSparkConf(conf: SparkConf): Option[ClientRoutesConf] = {
+    conf.getOption(ClientRoutesEndpointsParam.name) match {
+      case Some(value) =>
+        val endpoints = ClientRoutesConf.parseEndpoints(value) match {
+          case Right(endpoints) => endpoints
+          case Left(errors) =>
+            throw new IllegalArgumentException(
+              s"Invalid value of ${ClientRoutesEndpointsParam.name} '$value': ${errors.mkString(" ")}")
+        }
+        val nativeTransportPort = conf.getOption(ClientRoutesNativeTransportPortParam.name)
+          .fold(ClientRoutesNativeTransportPortParam.default) { port =>
+            Try(port.trim.toInt).toOption
+              .filter(ClientRoutesConf.validateNativeTransportPort(_).isEmpty)
+              .getOrElse(throw new IllegalArgumentException(
+                s"Invalid value of ${ClientRoutesNativeTransportPortParam.name} '$port': expected a port between 1 " +
+                  "and 65535."))
+          }
+        Some(ClientRoutesConf(
+          endpoints = endpoints,
+          shardAwareness = conf.getBoolean(
+            ClientRoutesShardAwarenessParam.name, ClientRoutesShardAwarenessParam.default),
+          verify = conf.getBoolean(ClientRoutesVerifyParam.name, ClientRoutesVerifyParam.default),
+          nativeTransportPort = nativeTransportPort))
+      case None =>
+        val ignored = Seq(ClientRoutesShardAwarenessParam.name, ClientRoutesVerifyParam.name,
+          ClientRoutesNativeTransportPortParam.name).filter(conf.contains)
+        if (ignored.nonEmpty)
+          logWarning(s"Ignoring ${ignored.mkString(", ")}: client routes are disabled because " +
+            s"${ClientRoutesEndpointsParam.name} is not set.")
+        None
+    }
+  }
+
+  /** Client routes rewrite the addresses of the nodes found through the contact points given by
+    * [[ConnectionHostParam]], so they cannot be combined with other ways of connecting. */
+  private def checkClientRoutes(contactInfo: ContactInfo): Unit = {
+    val unsupportedWith = contactInfo match {
+      case _: CloudBasedContactInfo => Some(CloudBasedConfigurationParam.name)
+      case _: ProfileFileBasedContactInfo => Some(ProfileFileBasedConfigurationParam.name)
+      case _: IpBasedContactInfo => None
+    }
+    unsupportedWith.foreach { param =>
+      throw new IllegalArgumentException(
+        s"${ClientRoutesEndpointsParam.name} cannot be combined with $param. Client routes need " +
+          s"${ConnectionHostParam.name} to point at a private endpoint address.")
+    }
+  }
+
   def fromSparkConf(conf: SparkConf) = {
 
     ConfigCheck.checkConfig(conf)
@@ -466,8 +575,12 @@ object CassandraConnectorConf extends Logging {
 
     val connectionFactory = CassandraConnectionFactory.fromSparkConf(conf)
 
+    val contactInfo = getContactInfoFromSparkConf(conf)
+    val clientRoutes = getClientRoutesFromSparkConf(conf)
+    if (clientRoutes.isDefined) checkClientRoutes(contactInfo)
+
     CassandraConnectorConf(
-      contactInfo = getContactInfoFromSparkConf(conf),
+      contactInfo = contactInfo,
       localDC = localDC,
       keepAliveMillis = keepAlive,
       minReconnectionDelayMillis = minReconnectionDelay,
@@ -482,7 +595,8 @@ object CassandraConnectorConf extends Logging {
       connectionFactory = connectionFactory,
       quietPeriodBeforeCloseMillis = quietPeriodBeforeClose,
       timeoutBeforeCloseMillis = timeoutBeforeClose,
-      resolveContactPoints = resolveContactPoints
+      resolveContactPoints = resolveContactPoints,
+      clientRoutes = clientRoutes
     )
   }
 

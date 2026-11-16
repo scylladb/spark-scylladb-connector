@@ -18,8 +18,10 @@
 
 package com.datastax.spark.connector.rdd.partitioner
 
+import java.net.InetSocketAddress
+
 import com.datastax.oss.driver.api.core.CqlIdentifier
-import com.datastax.oss.driver.api.core.metadata.TokenMap
+import com.datastax.oss.driver.api.core.metadata.{Node, TokenMap}
 import com.datastax.oss.driver.api.core.metadata.token.{TokenRange => DriverTokenRange}
 
 import scala.language.existentials
@@ -49,14 +51,17 @@ private[connector] class CassandraPartitionGenerator[V, T <: Token[V]](
   private val keyspaceName = CqlIdentifier.fromInternal(tableDef.keyspaceName) // TODO Lets fix all this later
 
 
-  private def tokenRange(range: DriverTokenRange, metadata: TokenMap): TokenRange = {
+  private def tokenRange(
+      range: DriverTokenRange,
+      metadata: TokenMap,
+      addressOf: Node => Option[InetSocketAddress]): TokenRange = {
 
     val startToken = tokenFactory.tokenFromString(metadata.format(range.getStart))
     val endToken = tokenFactory.tokenFromString(metadata.format(range.getEnd))
     val replicas = metadata
       .getReplicas(keyspaceName, range).asScala
       .map(node =>
-        DriverUtil.toAddress(node)
+        addressOf(node)
           .getOrElse(throw new IllegalStateException(s"Unable to determine Node Broadcast Address of $node")))
       .map(_.getAddress)
       .toSet
@@ -67,7 +72,9 @@ private[connector] class CassandraPartitionGenerator[V, T <: Token[V]](
     val ranges = connector.withSessionDo { session =>
       val tokenMap = Option(session.getMetadata.getTokenMap.get)
         .getOrElse(throw new IllegalStateException("Unable to determine Token Range Metadata"))
-      for (tr <- tokenMap.getTokenRanges().asScala) yield tokenRange(tr, tokenMap)
+      // A node is a replica of many token ranges: its address is resolved once for all of them
+      val addressOf = DriverUtil.addressResolver()
+      for (tr <- tokenMap.getTokenRanges().asScala) yield tokenRange(tr, tokenMap, addressOf)
     }
 
     /**

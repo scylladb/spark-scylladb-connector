@@ -30,6 +30,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import java.io.IOException
 import java.net.{InetAddress, InetSocketAddress}
+import java.util.UUID
 import scala.jdk.CollectionConverters._
 import scala.language.reflectiveCalls
 
@@ -88,6 +89,9 @@ class CassandraConnector(val conf: CassandraConnectorConf)
     }
 
   private[connector] def hostAddresses: Set[InetAddress] = hosts.map(_.getAddress)
+
+  /** [[hosts]] by host ID, which identifies a node even when nodes share an address, as behind a private endpoint. */
+  private[connector] def hostsById: Map[UUID, InetSocketAddress] = withSessionDo(dataCenterNodesById)
 
   /** Connection configurator */
   def connectionFactory = _config.connectionFactory
@@ -199,12 +203,14 @@ object CassandraConnector extends Logging {
     logInfo(s"Disconnected from Cassandra cluster.")
   }
 
+  private def dataCenterNodes(session: CqlSession): Set[InetSocketAddress] = dataCenterNodesById(session).values.toSet
+
   // LocalNodeFirstLoadBalancingPolicy assigns LOCAL or REMOTE (i.e. non-IGNORED) distance to local DC nodes
-  private def dataCenterNodes(session: CqlSession): Set[InetSocketAddress] = {
+  private def dataCenterNodesById(session: CqlSession): Map[UUID, InetSocketAddress] = {
     val allNodes = session.getMetadata.getNodes.asScala.values.toSet
-    val nodes = allNodes
-      .filter(_.getDistance != NodeDistance.IGNORED)
-      .flatMap(toAddress)
+    val nodes = session.getMetadata.getNodes.asScala.toMap
+      .filter { case (_, node) => node.getDistance != NodeDistance.IGNORED }
+      .flatMap { case (hostId, node) => toAddress(node).map(hostId -> _) }
     if (nodes.isEmpty) {
       throw new ConnectorConfigurationException(s"Could not determine suitable nodes in local DC for known nodes: " +
         s"${allNodes.map(n => (n.getHostId, toAddress(n))).mkString(", ")}")

@@ -19,6 +19,7 @@
 package com.datastax.spark.connector.rdd.partitioner
 
 import java.net.{InetAddress, InetSocketAddress}
+import java.util.UUID
 
 import com.datastax.oss.driver.api.core.CqlIdentifier
 import com.datastax.spark.connector.ColumnSelector
@@ -34,9 +35,11 @@ import scala.jdk.CollectionConverters._
 case class ReplicaPartition(index: Int, endpoints: Array[String]) extends EndpointPartition
 
 /**
- * The replica partitioner will work on an RDD which is keyed on sets of InetAddresses representing Cassandra
- * Hosts . It will group keys which share a common IP address into partitionsPerReplicaSet Partitions.
- * @param partitionsPerReplicaSet The number of Spark Partitions to make Per Unique Endpoint
+ * The replica partitioner works on an RDD whose rows can be converted to the partition key of the given table. It
+ * gives every node of the connected datacenter partitionsPerReplicaSet partitions, and puts each row in a partition
+ * of one of the replicas of its partition key. Nodes are identified by host ID, so nodes that share an IP address, as
+ * behind a private endpoint, get partitions of their own.
+ * @param partitionsPerReplicaSet The number of Spark Partitions to make per node
  */
 class ReplicaPartitioner[T](
   table: String,
@@ -61,7 +64,13 @@ implicit
   @transient lazy private val protocolVersion = connector.withSessionDo(_.getContext.getProtocolVersion)
   @transient lazy private val clazz = implicitly[ClassTag[T]].runtimeClass
 
-  private val hosts = connector.hosts.map(_.getAddress).toVector
+  // Hosts are identified by host ID: nodes behind a private endpoint (client routes) can share an address, and
+  // resolving the address of such a node can need a DNS lookup, so it is done once per node here
+  private val hostAddresses: Map[UUID, InetAddress] = connector.hostsById.map { case (id, address) =>
+    id -> address.getAddress
+  }
+  // Sorted, so that partitioners of the same cluster assign the same partitions to every host
+  private val hosts = hostAddresses.keys.toVector.sorted
   private val hostSet = hosts.toSet
   private val numHosts = hosts.size
   private val partitionIndexes = (0 until partitionsPerReplicaSet * numHosts)
@@ -69,13 +78,13 @@ implicit
     .toList
 
   private val hostMap = (hosts zip partitionIndexes).toMap
-  // Ip1 -> (0,1,2,..), Ip2 -> (11,12,13...)
-  private val indexMap = for ((ip, partitions) <- hostMap; partition <- partitions) yield (partition, ip)
-  // 0->IP1, 1-> IP1, ...
+  // Host1 -> (0,1,2,..), Host2 -> (11,12,13...)
+  private val indexMap = for ((host, partitions) <- hostMap; partition <- partitions) yield (partition, host)
+  // 0->Host1, 1-> Host1, ...
 
   private def absModulo(dividend: Int, divisor: Int) : Int = Math.abs(dividend % divisor)
 
-  private def randomHost(index: Int): InetAddress = hosts(absModulo(index, hosts.length))
+  private def randomHost(index: Int): UUID = hosts(absModulo(index, hosts.length))
 
   /**
    * Given a set of endpoints, pick a random endpoint, and then a random partition owned by that
@@ -92,7 +101,7 @@ implicit
         val tokenHash = Math.abs(token.hashCode())
         val replicas = tokenMap
           .getReplicas(_keyspace, token).asScala
-          .map(n => DriverUtil.toAddress(n).get.getAddress)
+          .map(_.getHostId)
 
         val replicaSetInDC = (hostSet & replicas).toVector
         if (replicaSetInDC.nonEmpty) {
@@ -112,9 +121,9 @@ implicit
   val nodeAddresses = new NodeAddresses(connector)
 
   def getEndpointPartition(partition: Partition): ReplicaPartition = {
-    val endpoints = indexMap.getOrElse(partition.index,
+    val host = indexMap.getOrElse(partition.index,
       throw new RuntimeException(s"$indexMap : Can't get an endpoint for Partition $partition.index"))
-    ReplicaPartition(index = partition.index, endpoints = nodeAddresses.hostNames(endpoints).toArray)
+    ReplicaPartition(index = partition.index, endpoints = nodeAddresses.hostNames(hostAddresses(host)).toArray)
   }
 
 }

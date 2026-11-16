@@ -109,6 +109,7 @@ lazy val connector = (project in file("connector"))
 
     libraryDependencies ++= Dependencies.Spark.dependencies
       ++ Dependencies.Compatibility.dependencies
+      ++ Dependencies.Connector.dependencies
       ++ Dependencies.TestConnector.dependencies,
 
     Compile / doc / scalacOptions ++= Seq("-no-java-comments")
