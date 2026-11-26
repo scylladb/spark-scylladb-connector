@@ -20,7 +20,9 @@ PRs. A manual omission label can be removed when a PR does not qualify.
 Labeling runs on PR creation, updates, reopening, editing and closing, including
 merges. Runs for the same PR are serialized, including manual backfills. The
 workflow checks out repository tooling at the event revision, never PR head
-code. Manual runs must select the repository default branch (`scylla-4.x`); a
+code. It uses the default self-checkout without an explicit `ref`, so checkout's
+fork guard does not reject a merged fork PR, whose merge SHA can equal the event SHA.
+Manual runs must select the repository default branch (`scylla-4.x`); a
 precondition rejects other selected refs before checkout. The same independent
 step confirms manual targets through the PR API and trusts matching PR events.
 Only confirmed PRs can reach label cleanup; ordinary issues and failed target
