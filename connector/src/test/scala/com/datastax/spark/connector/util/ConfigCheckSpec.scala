@@ -37,7 +37,17 @@ object CustomAuthConfFactory extends AuthConfFactory {
 
 class ConfigCheckSpec extends FlatSpec with Matchers  {
 
-  "ConfigCheck" should "throw an exception when the configuration contains a invalid spark.cassandra prop" in {
+  "ConfigCheck" should "accept and report a property that has no effect any more" in {
+    val name = CassandraConnectionFactory.continuousPagingParam.name
+    val sparkConf = new SparkConf(loadDefaults = false).set(name, "true")
+
+    ConfigCheck.ignoredPropertiesIn(sparkConf) shouldBe Seq(name)
+    ConfigCheck.ignoredPropertiesIn(new SparkConf(loadDefaults = false)) shouldBe empty
+    ConfigCheck.checkConfig(sparkConf) // only warns
+    sparkConf.get(name) shouldBe "true"
+  }
+
+  it should "throw an exception when the configuration contains a invalid spark.cassandra prop" in {
     val sparkConf = new SparkConf().set("spark.cassandra.foo.bar", "foobar")
     val exception = the[ConnectorConfigurationException] thrownBy ConfigCheck.checkConfig(sparkConf)
     exception.getMessage should include ("spark.cassandra.foo.bar")
